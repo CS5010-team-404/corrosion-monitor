@@ -1,0 +1,33 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: corrosion-db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: corrosion_monitor
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      TZ: UTC
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+      # Runs only the first time, when the data volume is empty.
+      # To re-run: docker compose down -v
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Catches alert emails locally. Web inbox at http://localhost:8025
+  mailhog:
+    image: mailhog/mailhog
+    container_name: corrosion-mail
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+volumes:
+  db_data:

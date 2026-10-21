@@ -1,0 +1,38 @@
+# Build output
+target/
+build/
+*.class
+*.jar
+*.war
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets and local config (never commit these)
+.env
+*.pem
+*.key
+*.p12
+*.jks
+application-local.properties
+application-local.yml
+
+# Logs
+*.log
+logs/
+
+# Docker data
+db_data/
+
+# Node (if the frontend uses it)
+node_modules/
