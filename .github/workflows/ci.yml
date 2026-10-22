@@ -18,12 +18,6 @@ jobs:
           java-version: "17"
           cache: maven
 
-      # Skipped until the team adds a root pom.xml (parent pom with backend and simulator modules).
       # Testcontainers can start MySQL because Docker is available on GitHub's Ubuntu runners.
       - name: Build and test
-        if: ${{ hashFiles('pom.xml') != '' }}
         run: mvn -B verify
-
-      - name: No pom.xml yet
-        if: ${{ hashFiles('pom.xml') == '' }}
-        run: echo "No pom.xml yet, skipping build."
