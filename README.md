@@ -10,7 +10,7 @@ Monitors temperature and humidity around electronic equipment, calculates dew po
 
 Sensor simulator (or optional Raspberry Pi + SHT31) → Ingestion API (Spring Boot) → MySQL → Analytics, Sensor health, Alert service, Audit service → REST API and web dashboard → Operator, Technician, Manager, Admin.
 
-Details: [docs/]([docs](https://docs.google.com/document/d/1L7SXx4X53GcaBaeJO9PHYQX_N1n1vKO_3BM5HEUOgcg/edit?usp=sharing)/)
+Details: [docs/](docs/) | [Project proposal (Google Doc)](https://docs.google.com/document/d/1L7SXx4X53GcaBaeJO9PHYQX_N1n1vKO_3BM5HEUOgcg/edit?usp=sharing)
 
 ## Repository layout
 
