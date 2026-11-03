@@ -9,6 +9,10 @@ deployment). Read `docs/ARCHITECTURE.md` and `docs/CONTRACTS.md` before changing
   when the person running this session owns that area, or when a prompt explicitly says so and the diff has been shown
   and approved.
 - Joshua's code: `platform/`, `frontend/`, `deploy/`, `scripts/`, `devices/`, `render.yaml`, `docker-compose.platform.yml`.
+- Exception (team decision, `docs/DECISIONS.md`): Joshua may change `backend/` and `db/` only for decisions 1
+  (authentication), 2 (platform sensors/readings replace sensor/reading/used_nonce), 4 (TECHNICIAN role),
+  5 (equipment table) and 6 (Flyway migrations). Everything else there stays with its owners.
+- Follow `docs/DECISIONS.md`: `/api/v1` prefix, four roles, Java 17 / Spring Boot 3.4.1, platform as its own service.
 - Services meet only in the shared tables in `docs/CONTRACTS.md`. Never call another service directly.
 - When something the UI needs does not exist, record it in `docs/GAPS.md` with its owner; do not build other
   people's areas without them.
