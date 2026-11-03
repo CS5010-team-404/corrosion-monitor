@@ -1,0 +1,25 @@
+// Render passes service URLs as bare hosts ("corrosion-watch-api.onrender.com") or full URLs. Normalise both.
+function url(value: string | undefined): string {
+  if (!value) return "";
+  const v = value.replace(/\/$/, "");
+  return /^https?:\/\//.test(v) ? v : `https://${v}`;
+}
+const toWs = (http: string) => http.replace(/^http/, "ws");
+const sameOrigin = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}`;
+
+const apiBase = url(import.meta.env.VITE_API_URL);
+const platformBase = url(import.meta.env.VITE_PLATFORM_URL) || apiBase;
+
+export const config = {
+  /** Team backend: auth, analytics, alerts, audit, reports, admin. "" = same origin (dev proxy). */
+  apiBase,
+  /** Data platform: ingestion, sensor health, simulator, forecast. Same as apiBase when embedded. */
+  platformBase,
+  wsApi: apiBase ? `${toWs(apiBase)}/ws` : `${sameOrigin}/ws`,
+  wsPlatform: platformBase ? `${toWs(platformBase)}/ws` : `${sameOrigin}/ws-platform`,
+  useMocks: import.meta.env.VITE_USE_MOCKS === "true",
+};
+
+/** Paths served by the data platform rather than the team backend. */
+export const PLATFORM_PATHS = ["/api/ingest", "/api/health", "/api/admin/simulator", "/api/admin/sensors", "/api/sensors", "/api/forecast"];
+export const isPlatformPath = (path: string) => PLATFORM_PATHS.some((p) => path.startsWith(p));

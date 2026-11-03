@@ -1,0 +1,32 @@
+# Local stack for the data platform: MySQL 8 + the platform service (with the embedded simulator).
+#   docker compose -f docker-compose.platform.yml up --build
+# Then run the frontend with `cd frontend && npm run dev` (proxies to :8081). Add the team backend as another
+# service here (port 8080, same database) so the whole system runs together; see docs/DEPLOYMENT.md.
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: ecp
+      MYSQL_USER: ecp
+      MYSQL_PASSWORD: ecp
+      MYSQL_ROOT_PASSWORD: root
+    ports: ["3306:3306"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
+      interval: 5s
+      retries: 20
+    volumes: [mysql-data:/var/lib/mysql]
+
+  platform:
+    build: { context: ., dockerfile: deploy/platform.Dockerfile }
+    depends_on: { mysql: { condition: service_healthy } }
+    environment:
+      ECP_DB_URL: jdbc:mysql://mysql:3306/ecp?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true&useSSL=false
+      ECP_DB_USER: ecp
+      ECP_DB_PASSWORD: ecp
+      ECP_PLATFORM_AUTH: none        # local only; on Render it validates the team backend's JWT
+      PORT: 8081
+    ports: ["8081:8081"]
+
+volumes:
+  mysql-data:

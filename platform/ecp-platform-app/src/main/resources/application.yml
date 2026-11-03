@@ -1,0 +1,64 @@
+# Corrosion Watch data platform. Every value can be overridden by an environment variable (Render: Environment).
+spring:
+  application:
+    name: ecp-platform
+  datasource:
+    url: ${ECP_DB_URL:jdbc:mysql://localhost:3306/ecp?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true&useSSL=false}
+    username: ${ECP_DB_USER:ecp}
+    password: ${ECP_DB_PASSWORD:ecp}
+    hikari:
+      maximum-pool-size: ${ECP_DB_POOL:5}
+  flyway:
+    enabled: true
+    locations: classpath:db/platform
+    table: flyway_platform_history     # separate from the team backend's migration history
+    baseline-on-migrate: true
+    baseline-version: 0
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    time-zone: UTC
+  task:
+    scheduling:
+      pool:
+        size: 6
+
+server:
+  port: ${PORT:8081}
+  forward-headers-strategy: framework
+  error:
+    include-message: always
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+ecp:
+  platform:
+    auth: ${ECP_PLATFORM_AUTH:jwt}           # jwt | none (local development only)
+    jwt:
+      roles-claim: ${ECP_JWT_ROLES_CLAIM:roles}
+  security:
+    jwt-secret: ${ECP_JWT_SECRET:dev-only-jwt-secret-change-me-0123456789abcdef}   # must equal the team backend's
+  crypto:
+    secret-key: ${ECP_SECRET_KEY:dev-only-device-secret-key}
+    salt: ${ECP_SECRET_SALT:5c0744940b5c369b}
+  demo:
+    seed: ${ECP_DEMO_SEED:true}
+  simulator:
+    enabled: ${ECP_SIMULATOR_ENABLED:true}
+    scenario-speed: ${ECP_SIMULATOR_SPEED:1.0}  # 1.0 = demo speed; 0.17 = realistic
+  ingestion:
+    max-clock-skew: PT5M
+  retention:
+    raw-days: ${ECP_RETENTION_DAYS:7}
+  health:
+    evaluate-every: PT5S
+    late-factor: 2.0
+    offline-factor: 6.0
+    window: PT15M
+    stuck-min-readings: 20
+    recovery-evaluations: 3
+    service-stale-after: PT2M
