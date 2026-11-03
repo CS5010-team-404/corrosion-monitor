@@ -1,6 +1,6 @@
 # Data platform service (ingestion, sensor health, simulator, forecast). Build context: repository root.
 #   docker build -f deploy/platform.Dockerfile -t corrosion-watch-platform .
-FROM maven:3.9-eclipse-temurin-21 AS build
+FROM maven:3.9-eclipse-temurin-17 AS build
 WORKDIR /src
 COPY platform/pom.xml platform/pom.xml
 COPY platform/ecp-common/pom.xml platform/ecp-common/pom.xml
@@ -13,7 +13,7 @@ RUN mvn -q -B -f platform/pom.xml dependency:go-offline || true
 COPY platform platform
 RUN mvn -q -B -f platform/pom.xml -DskipTests package
 
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:17-jre
 RUN useradd --system --uid 10001 app
 WORKDIR /app
 COPY --from=build /src/platform/ecp-platform-app/target/ecp-platform.jar app.jar
