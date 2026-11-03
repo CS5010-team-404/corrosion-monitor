@@ -30,7 +30,7 @@ scripts/smoke-test.sh <platform-url> <web-url> [<api-url>]
 ```
 
 ## Code style
-- Java 21, Spring Boot 3.5. Domain logic in plain Java classes with unit tests; Spring only at the edges.
+- Java 17, Spring Boot 3.4.1 (decision 7). Domain logic in plain Java classes with unit tests; Spring only at the edges.
 - JUnit 5, aim for 70% coverage (course requirement).
 - Frontend: React 18 + TypeScript strict, no UI library. Use classes from `src/styles/design-system.css` and the
   components in `src/components/`. URLs live only in `src/api/endpoints.ts`.
