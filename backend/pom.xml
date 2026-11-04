@@ -37,6 +37,11 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
+        <!-- /actuator/health for the Render health check (only that endpoint is exposed) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
         <!-- Issues and validates the HS256 JWT shared with the platform (docs/CONTRACTS.md) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
