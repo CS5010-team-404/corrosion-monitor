@@ -1,32 +1,20 @@
-# Local stack for the data platform: MySQL 8 + the platform service (with the embedded simulator).
+# Local stack for the data platform: the team's MySQL + MailHog (docker-compose.yml) plus the platform service
+# (with the embedded simulator). One MySQL on 3306 is shared with the team backend; each service runs its own
+# Flyway history in the same corrosion_monitor database.
 #   docker compose -f docker-compose.platform.yml up --build
-# Then run the frontend with `cd frontend && npm run dev` (proxies to :8081). Add the team backend as another
-# service here (port 8080, same database) so the whole system runs together; see docs/DEPLOYMENT.md.
-services:
-  mysql:
-    image: mysql:8.0
-    environment:
-      MYSQL_DATABASE: corrosion_monitor
-      MYSQL_USER: ecp
-      MYSQL_PASSWORD: ecp
-      MYSQL_ROOT_PASSWORD: root
-    ports: ["3306:3306"]
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
-      interval: 5s
-      retries: 20
-    volumes: [mysql-data:/var/lib/mysql]
+# Then run the backend against the same database (mvn -pl backend spring-boot:run, port 8080) and the frontend with
+# `cd frontend && npm run dev` (proxies to :8080 and :8081).
+include:
+  - docker-compose.yml
 
+services:
   platform:
     build: { context: ., dockerfile: deploy/platform.Dockerfile }
-    depends_on: { mysql: { condition: service_healthy } }
+    depends_on: { db: { condition: service_healthy } }
     environment:
-      ECP_DB_URL: jdbc:mysql://mysql:3306/corrosion_monitor?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true&useSSL=false
-      ECP_DB_USER: ecp
-      ECP_DB_PASSWORD: ecp
+      ECP_DB_URL: jdbc:mysql://db:3306/corrosion_monitor?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true&useSSL=false
+      ECP_DB_USER: ${MYSQL_USER:-app_rw}
+      ECP_DB_PASSWORD: ${MYSQL_PASSWORD:-change-me-app}
       ECP_PLATFORM_AUTH: none        # local only; on Render it validates the team backend's JWT
       PORT: 8081
     ports: ["8081:8081"]
-
-volumes:
-  mysql-data:
