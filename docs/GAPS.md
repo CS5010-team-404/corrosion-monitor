@@ -16,7 +16,6 @@ Owners: Aayushee (analytics), Dumebi (alerts), Anela (audit), Joshua (platform/f
 - Missing: CORS for the frontend origin (`FRONTEND_HOST`). Owner: Joshua
 - Missing: backend `Dockerfile`, a runnable (repackaged) jar, and the actuator dependency for `/actuator/health`. Owner: Joshua
 - Mismatch: the `render.yaml` api block (Dockerfile path, health path, env names) does not match the backend; the backend reads `DB_URL`/`MYSQL_USER`/`MYSQL_PASSWORD`. Owner: Joshua
-- Missing: on Aiven, `log_bin_trust_function_creators` must be ON, or V1 fails to create the `audit_log` triggers (MySQL error 1419). Owner: team
 
 ### Team (users and configuration)
 - Missing: `GET /api/v1/admin/users` (`User`: username, fullName, enabled, lockedUntil, lastLoginAt; there are no `enabled`/`last_login_at` columns). Owner: team
@@ -63,3 +62,4 @@ Owners: Aayushee (analytics), Dumebi (alerts), Anela (audit), Joshua (platform/f
 - One shared MySQL 8.0 for backend and platform locally (`docker-compose.platform.yml` includes `docker-compose.yml`). 73a72ab
 - `/api/v1` prefix on every platform and frontend path. daa4e41
 - Java 17 / Spring Boot 3.4.1 for the platform (decision 7). 75875d8
+- Aiven `log_bin_trust_function_creators` is already ON (checked by hand: a test trigger was created), so V1's `audit_log` triggers run there. Production `sql_mode` and `sql_require_primary_key=ON` are recorded in DEPLOYMENT.md and applied locally and in backend tests; all migrations, backend tests and every platform endpoint pass under them (no SQL changes were needed).

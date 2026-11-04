@@ -24,17 +24,23 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers
 class FlywayValidationTest {
 
-    // Binary logging is on in MySQL 8.0; without this flag the app account cannot create the audit triggers.
+    // Production (Aiven) settings: see AivenMySql.
     @Container
     @ServiceConnection
-    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
-            .withCommand("--log-bin-trust-function-creators=1");
+    static final MySQLContainer<?> MYSQL = AivenMySql.container();
 
     @Autowired
     Flyway flyway;
 
     @Autowired
     JdbcTemplate jdbc;
+
+    @Test
+    void runsUnderTheProductionSqlSettings() {
+        assertThat(jdbc.queryForObject("SELECT @@SESSION.sql_mode", String.class))
+                .contains("ANSI_QUOTES", "PIPES_AS_CONCAT", "ONLY_FULL_GROUP_BY", "STRICT_ALL_TABLES");
+        assertThat(jdbc.queryForObject("SELECT @@GLOBAL.sql_require_primary_key", Integer.class)).isEqualTo(1);
+    }
 
     @Test
     void everyMigrationIsApplied() {

@@ -8,17 +8,36 @@ Create a free MySQL service at aiven.io. From its overview copy host, port, user
 ```
 jdbc:mysql://HOST:PORT/defaultdb?sslMode=REQUIRED&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&rewriteBatchedStatements=true
 ```
-The free tier allows few connections: keep `ECP_DB_POOL` at 4-5 per service.
+The free tier allows few connections: keep the pools at 4-5 per service (`DB_POOL` backend, `ECP_DB_POOL` platform).
+
+**Production settings (checked by hand on our Aiven service).** Local MySQL (`docker-compose.yml`) and every backend
+Testcontainers MySQL (`backend/src/test/.../AivenMySql.java`) run with the same values, so SQL that passes locally passes
+in production:
+```
+sql_mode=REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ANSI,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+sql_require_primary_key=ON
+log_bin_trust_function_creators=ON      (a test trigger was created successfully, so V1's audit_log triggers work)
+```
+What that means for SQL: string literals in single quotes only (`"x"` is an identifier under ANSI_QUOTES); `||` is
+string concatenation, not OR; every selected column must be grouped or aggregated; every table needs a primary key;
+values that do not fit are errors, not silent truncation.
+
+**Schema.** The backend creates the team schema with Flyway on startup (`backend/src/main/resources/db/migration`,
+history in `flyway_schema_history`); the platform adds its tables with its own history (`flyway_platform_history`).
+Either may start first.
 
 ## 2. Secrets
 `scripts/gen-secrets.sh` prints values for `ECP_SECRET_SALT` (and others if needed). `ECP_JWT_SECRET` is generated
-once by Render in the `corrosion-watch-shared` env group, so both backends use the same value.
-**The team backend must sign JWTs with HS256 using `ECP_JWT_SECRET`** and put roles in a `roles` claim. If it uses
-something else, change `SecurityConfig` in the platform (or `ECP_JWT_ROLES_CLAIM`), not the backend.
+once by Render in the `corrosion-watch-shared` env group, so both services use the same value. The backend signs
+HS256 tokens with it (`sub` = email, `roles` = [role], `name`, 8 hours) and refuses to start if it is missing or
+shorter than 32 bytes; the platform validates the same token.
+`ECP_DEMO_PASSWORD` sets the password of the four demo users (tech@, operator@, manager@, admin@corrosionwatch.app)
+that the backend creates on an empty `app_user` table; without it no demo users are created.
 
 ## 3. Blueprint
 Render → New → Blueprint → choose the repository. Render reads `render.yaml`, then asks for every `sync: false`
-variable: the three `ECP_DB_*` values for both backends, and `ECP_SECRET_SALT`. First builds take a few minutes.
+variable: backend `DB_URL`, `MYSQL_USER`, `MYSQL_PASSWORD`, `ECP_DEMO_PASSWORD`; platform `ECP_DB_URL`, `ECP_DB_USER`,
+`ECP_DB_PASSWORD`, `ECP_SECRET_SALT`. First builds take a few minutes.
 
 ## 4. Check
 ```
@@ -31,7 +50,7 @@ Open the web URL, sign in, and watch the simulated devices appear within a minut
 - Free web services sleep after 15 idle minutes; the platform must not (simulator, health checks), hence Starter.
 - Render's Free and Starter plans block outbound SMTP ports; send alert e-mails through an HTTPS e-mail API, or keep
   notifications in the app.
-- The demo devices link to equipment ids 1-12. Point them at real rows with
-  `UPDATE sensors SET equipment_id = <id>, equipment_name = '<name>', location_name = '<loc>' WHERE device_id = 'SIM-001';`
+- The demo devices link to equipment ids 1-12, which V3 creates with the same names. To point a device at another
+  item: `UPDATE sensors SET equipment_id = <id>, equipment_name = '<name>', location_name = '<loc>' WHERE device_id = 'SIM-001';`
 - Local: `docker compose -f docker-compose.platform.yml up --build`, then `cd frontend && npm run dev`.
   Without Java: `cd frontend && npm run dev:mock`.

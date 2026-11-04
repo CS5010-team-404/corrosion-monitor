@@ -5,8 +5,12 @@ services:
   db:
     image: mysql:8.0
     container_name: corrosion-db
-    # Binary logging is on in MySQL 8.0; this lets the app account create the audit_log triggers (V1).
-    command: --log-bin-trust-function-creators=1
+    # Same settings as production (Aiven, checked by hand; docs/DEPLOYMENT.md), so SQL that works here works there.
+    # log_bin_trust_function_creators lets the app account create the audit_log triggers (V1).
+    command:
+      - --sql-mode=REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ANSI,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+      - --sql-require-primary-key=ON
+      - --log-bin-trust-function-creators=1
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change-me-root}
       MYSQL_DATABASE: corrosion_monitor

@@ -41,10 +41,9 @@ class SharedSchemaMigrationTest {
             // history
             "flyway_schema_history", "flyway_platform_history");
 
-    // Binary logging is on in MySQL 8.0; without this flag a non-SUPER account cannot create the audit triggers.
+    // Production settings (ANSI sql_mode, required primary keys, trigger creation allowed).
     @Container
-    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
-            .withCommand("--log-bin-trust-function-creators=1");
+    static final MySQLContainer<?> MYSQL = AivenMySql.container();
 
     @BeforeAll
     static void createDatabases() throws SQLException {
