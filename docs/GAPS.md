@@ -21,14 +21,15 @@ Owners: Aayushee (analytics), Dumebi (alerts), Anela (audit), Joshua (platform/f
 - Missing: STOMP `/ws` with `/topic/risk` and `/topic/alerts` (optional, because the UI polls). Owner: team
 - Mismatch: path prefix `/api/v1/...` (docs/1-api-contract.md) vs `/api/...` (UI, CONTRACTS.md). Owner: team
 - Mismatch: Java 17 / Boot 3.4.1 (backend, ci.yml) vs Java 21 / Boot 3.5.6 (platform, CLAUDE.md). Owner: team
-- Risk: `db/schema.sql` runs `CREATE DATABASE corrosion_monitor; USE …` and uses `DELIMITER`, so it cannot run on Aiven `defaultdb` or through Flyway as is. Owner: team
-- Missing: a migration tool for the team schema (only a Docker init script, which runs once on an empty volume). Owner: team
+- Done: the team schema runs through Flyway (`backend/src/main/resources/db/migration`, V1 = old `db/schema.sql` without `CREATE DATABASE`/`USE`/`DELIMITER`). Owner: Joshua (decision 6)
+- Missing: on Aiven, set `log_bin_trust_function_creators = ON` in the MySQL service's advanced configuration. Without it, V1 fails to create the `audit_log` triggers (MySQL error 1419). Owner: team
 - Missing: `GET /api/profiles`. `equipment_profile` has no `tempMinC`/`tempMaxC`/`surfaceOffsetC` and names its columns `rh_warn_pct`/`dew_margin_warn_c`. Owner: team
 - Mismatch: the UI is built around "equipment" (`equipmentId`). The schema only has `location` + `equipment_profile`, and there is no `equipment` table. Owner: team
 
 ## Analytics (Aayushee)
 - Missing: `GET /api/equipment/status` → `EquipmentStatus[]`. Owner: Aayushee
 - Missing: `GET /api/equipment/{id}/assessments?minutes=` → `AssessmentPoint[]`. Owner: Aayushee
+- Confirm or replace demo profile thresholds and risk_budget in V3 with cited values. Owner: Aayushee
 - Missing: a `risk_assessments` table (ARCHITECTURE.md); the schema has `risk_state` (per-location score) and `forecast`. Owner: Aayushee
 - Mismatch: analytics must read platform `readings` and skip `sensor_health.trusted = false`, but the schema has its own `reading` table. Owner: Aayushee
 - Missing: producing `alert_signals` (`ANALYTICS:CONDENSATION_RISK:<id>`, `ANALYTICS:CONDENSATION_FORECAST:<id>`). Owner: Aayushee

@@ -72,6 +72,28 @@ class FlywayValidationTest {
     }
 
     @Test
+    void demoEquipmentMatchesThePlatformDemoDevices() {
+        // Same order and names as platform/ecp-platform-app/.../demo/DemoDevices.java (SIM-001..SIM-012 -> ids 1..12).
+        assertThat(jdbc.queryForList("""
+                SELECT CONCAT(e.id, ' ', e.name, ' @ ', l.name, ' / ', p.name)
+                FROM equipment e JOIN location l ON l.id = e.location_id JOIN equipment_profile p ON p.id = e.profile_id
+                ORDER BY e.id
+                """, String.class)).containsExactly(
+                "1 Rack A1 @ Server Room A / IT equipment (ASHRAE)",
+                "2 Rack A2 @ Server Room A / IT equipment (ASHRAE)",
+                "3 Rack A3 @ Server Room A / IT equipment (ASHRAE)",
+                "4 Core switch cabinet @ Telecom Closet 2 / Telecom cabinet",
+                "5 Patch panel C2 @ Telecom Closet 2 / Telecom cabinet",
+                "6 Router cabinet @ Telecom Closet 2 / Telecom cabinet",
+                "7 PLC panel L3-01 @ Factory Floor, Line 3 / Industrial control panel",
+                "8 Drive panel L3-02 @ Factory Floor, Line 3 / Industrial control panel",
+                "9 PLC panel L3-03 @ Factory Floor, Line 3 / Industrial control panel",
+                "10 Kiosk N1 @ North Gate / Outdoor enclosure",
+                "11 Kiosk N2 @ North Gate / Outdoor enclosure",
+                "12 Barrier controller @ North Gate / Outdoor enclosure");
+    }
+
+    @Test
     void replacedTablesAreGoneAndEquipmentExists() {
         Integer gone = jdbc.queryForObject("""
                 SELECT COUNT(*) FROM information_schema.tables
