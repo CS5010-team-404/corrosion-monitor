@@ -20,7 +20,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * Starts the backend on a fresh MySQL 8.0: Flyway applies every migration and the context starts with
  * spring.jpa.hibernate.ddl-auto=validate, so a mismatch between entities and migrations fails here.
  */
-@SpringBootTest
+@SpringBootTest(properties = "ecp.security.jwt-secret=test-only-jwt-secret-for-backend-tests-0001")
 @Testcontainers
 class FlywayValidationTest {
 
