@@ -39,7 +39,19 @@ Render → New → Blueprint → choose the repository. Render reads `render.yam
 variable: backend `DB_URL`, `MYSQL_USER`, `MYSQL_PASSWORD`, `ECP_DEMO_PASSWORD`; platform `ECP_DB_URL`, `ECP_DB_USER`,
 `ECP_DB_PASSWORD`, `ECP_SECRET_SALT`. First builds take a few minutes.
 
-## 4. Check
+## 4. Check the database migrations (optional, before or after the first deploy)
+`scripts/check-aiven.sh` runs the backend's Flyway migrations once against the database in `DB_URL` and prints the
+applied versions and the tables. It reads `DB_URL`, `MYSQL_USER` and `MYSQL_PASSWORD` from the environment only (never
+from files), never prints the password, and refuses a `DB_URL` that contains one. It needs Java 17 and Maven, builds the
+backend jar, then runs `com.team404.corrosion.tools.MigrateOnly` without starting the web application:
+```
+ DB_URL='jdbc:mysql://HOST:PORT/defaultdb?sslMode=REQUIRED&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true' \
+ MYSQL_USER=avnadmin MYSQL_PASSWORD='<from Aiven>' scripts/check-aiven.sh
+```
+(The leading space keeps the line out of shell history when `HISTCONTROL=ignorespace`.) Running it twice is safe:
+the second run reports `Migrations run now: 0`. The backend runs the same migrations on startup anyway.
+
+## 5. Check the services
 ```
 scripts/smoke-test.sh https://corrosion-watch-platform.onrender.com https://corrosion-watch-web.onrender.com https://corrosion-watch-api.onrender.com
 scripts/send-reading.sh SIM-001 '<secret>' https://corrosion-watch-platform.onrender.com
