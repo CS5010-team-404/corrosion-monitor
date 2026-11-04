@@ -7,16 +7,6 @@ Owners: Aayushee (analytics), Dumebi (alerts), Anela (audit), Joshua (platform/f
 
 ## Open
 
-### Joshua: authentication and deployment (decision 1)
-- Missing: `POST /api/v1/auth/login {email, password}` → `{token, expiresAt, email, fullName, role}` and `GET /api/v1/auth/me`. Owner: Joshua
-- Missing: JWT issuing (HS256, key from `ECP_JWT_SECRET` ≥ 32 bytes, `sub` = email, `roles` array claim). The platform rejects anything else. Owner: Joshua
-- Missing: lockout logic (5 failures → 15 min) over `app_user.failed_logins`/`locked_until`. Owner: Joshua
-- Mismatch: the UI signs in with `username`; decision 1 says email. Owner: Joshua
-- Risk: starter-security with no config means every request gets a generated Basic-auth password. Owner: Joshua
-- Missing: CORS for the frontend origin (`FRONTEND_HOST`). Owner: Joshua
-- Missing: backend `Dockerfile`, a runnable (repackaged) jar, and the actuator dependency for `/actuator/health`. Owner: Joshua
-- Mismatch: the `render.yaml` api block (Dockerfile path, health path, env names) does not match the backend; the backend reads `DB_URL`/`MYSQL_USER`/`MYSQL_PASSWORD`. Owner: Joshua
-
 ### Team (users and configuration)
 - Missing: `GET /api/v1/admin/users` (`User`: username, fullName, enabled, lockedUntil, lastLoginAt; there are no `enabled`/`last_login_at` columns). Owner: team
 - Missing: `GET /api/v1/profiles`. `equipment_profile` has no `tempMinC`/`tempMaxC`/`surfaceOffsetC` and names its columns `rh_warn_pct`/`dew_margin_warn_c`. Owner: team
@@ -54,6 +44,14 @@ Owners: Aayushee (analytics), Dumebi (alerts), Anela (audit), Joshua (platform/f
 - `alert` + `alert_signals` and `audit_log` + `audit_outbox` have different roles (state vs inbox); keep both.
 
 ## Done
+- Login: `POST /api/v1/auth/login {email, password}` → `{token, expiresAt, email, fullName, role}` and `GET /api/v1/auth/me`, on `app_user` (BCrypt, same message for unknown email and wrong password). a4c64b0, 07c7480
+- Lockout: 5 consecutive failures lock for 15 minutes (`failed_logins`, `locked_until`), refused even with the right password, success resets; times stored in UTC. a4c64b0, 2035586
+- JWT: HS256 with `ECP_JWT_SECRET` (startup fails if missing or < 32 bytes), `sub` = email, `roles` = [role], `name`, 8 hours; validated exactly like the platform. 07c7480
+- Security: stateless, CSRF off, role rules per CONTRACTS, CORS for `FRONTEND_HOST` + localhost:5173, health-only actuator (replaces the generated Basic-auth password). d19a992
+- Audit: `USER_LOGIN`, `USER_LOGIN_FAILED`, `ACCOUNT_LOCKED` written to `audit_outbox`. e689d86
+- Demo users (one per role) from `ECP_DEMO_PASSWORD`. 62c7cff
+- UI signs in with email. 9578a2a
+- Runnable backend jar, `backend/Dockerfile`, and the `render.yaml` api block with the env vars the backend reads. ed345f2, 081e0ff
 - TECHNICIAN role: `chk_user_role` allows TECHNICIAN, OPERATOR, MANAGER, ADMIN (V2). 7a32f4b
 - Equipment table: `equipment(location_id, profile_id, name)`, so a location has many items (V2); demo items 1–12 in V3 72462e2. 7a32f4b
 - Dropped `sensor`, `reading`, `used_nonce`; the platform's `sensors`/`readings` (timestamp + HMAC ingestion) are the only copies. This also closes the `sensor.health` vs `sensor_health.status` mismatch. 7a32f4b
