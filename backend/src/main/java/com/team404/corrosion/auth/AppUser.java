@@ -9,14 +9,14 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 /**
- * A row of the team's app_user table (V1). Times are stored as UTC DATETIME(3), so they are mapped as LocalDateTime
- * (hibernate.jdbc.time_zone=UTC) and converted to Instant at the edges.
+ * A row of the team's app_user table (V1). Times are UTC DATETIME(3) columns, mapped as Instant with a plain TIMESTAMP
+ * JDBC type: with hibernate.jdbc.time_zone=UTC they are written in UTC whatever the JVM's zone is. (A LocalDateTime
+ * would be shifted by the JVM's offset on a developer machine, and Hibernate's default TIMESTAMP_UTC type for Instant
+ * fails schema validation against DATETIME.)
  */
 @Entity
 @Table(name = "app_user")
@@ -44,11 +44,13 @@ public class AppUser {
     @Column(name = "failed_logins", nullable = false)
     private int failedLogins;
 
+    @JdbcTypeCode(SqlTypes.TIMESTAMP)
     @Column(name = "locked_until")
-    private LocalDateTime lockedUntil;
+    private Instant lockedUntil;
 
+    @JdbcTypeCode(SqlTypes.TIMESTAMP)
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
     protected AppUser() {
     }
@@ -58,7 +60,7 @@ public class AppUser {
         this.email = email;
         this.passwordHash = passwordHash;
         this.role = role;
-        this.createdAt = toUtc(createdAt);
+        this.createdAt = createdAt;
     }
 
     public Long getId() {
@@ -82,15 +84,11 @@ public class AppUser {
     }
 
     public LoginPolicy.State loginState() {
-        return new LoginPolicy.State(failedLogins, lockedUntil == null ? null : lockedUntil.toInstant(ZoneOffset.UTC));
+        return new LoginPolicy.State(failedLogins, lockedUntil);
     }
 
     public void applyLoginState(LoginPolicy.State state) {
         this.failedLogins = state.failedLogins();
-        this.lockedUntil = toUtc(state.lockedUntil());
-    }
-
-    private static LocalDateTime toUtc(Instant instant) {
-        return instant == null ? null : LocalDateTime.ofInstant(instant, ZoneOffset.UTC);
+        this.lockedUntil = state.lockedUntil();
     }
 }
