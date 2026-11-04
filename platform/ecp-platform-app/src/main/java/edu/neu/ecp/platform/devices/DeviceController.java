@@ -47,10 +47,11 @@ public class DeviceController {
     @GetMapping("/api/v1/sensors")
     public List<Map<String, Object>> list() {
         return jdbc.queryForList("""
-                SELECT id, device_id, kind, model, expected_interval_s, active, equipment_id, equipment_name,
-                       location_name, created_at
+                SELECT id, device_id AS deviceId, kind, model, expected_interval_s AS expectedIntervalS, active,
+                       equipment_id AS equipmentId, equipment_name AS equipmentName,
+                       location_name AS locationName, created_at AS createdAt
                 FROM sensors ORDER BY device_id
-                """); // never return secret_enc
+                """); // never return secret_enc; keys match Device in frontend/src/api/types.ts
     }
 
     @PostMapping("/api/v1/admin/sensors")
