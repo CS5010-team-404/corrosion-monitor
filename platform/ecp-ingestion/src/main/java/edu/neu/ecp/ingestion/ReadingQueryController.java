@@ -27,7 +27,7 @@ public class ReadingQueryController {
         this.clock = clock;
     }
 
-    @GetMapping("/api/sensors/{sensorId}/readings")
+    @GetMapping("/api/v1/sensors/{sensorId}/readings")
     public List<ReadingView> readings(@PathVariable long sensorId, @RequestParam(defaultValue = "60") int minutes) {
         Instant since = clock.instant().minus(Duration.ofMinutes(Math.max(1, Math.min(minutes, 7 * 24 * 60))));
         return jdbc.query("""

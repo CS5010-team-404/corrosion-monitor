@@ -6,7 +6,7 @@ Reads temperature and humidity every INTERVAL seconds, signs each batch exactly 
 Readings that cannot be sent are kept in a local queue and sent later in order, up to 500 per batch.
 
     pip install smbus2
-    export ECP_INGEST_URL=https://corrosion-watch-platform.onrender.com/api/ingest/readings
+    export ECP_INGEST_URL=https://corrosion-watch-platform.onrender.com/api/v1/ingest/readings
     export ECP_DEVICE_ID=PI-001 ECP_DEVICE_SECRET='shown once when an admin registers the device'
     python3 sender.py            # or install the systemd unit in this folder
 
@@ -23,7 +23,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-URL = os.environ.get("ECP_INGEST_URL", "http://localhost:8081/api/ingest/readings")
+URL = os.environ.get("ECP_INGEST_URL", "http://localhost:8081/api/v1/ingest/readings")
 DEVICE = os.environ["ECP_DEVICE_ID"] if "ECP_DEVICE_ID" in os.environ else "PI-001"
 SECRET = os.environ.get("ECP_DEVICE_SECRET", "")
 INTERVAL = int(os.environ.get("ECP_INTERVAL_S", "15"))

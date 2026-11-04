@@ -44,7 +44,7 @@ public class DeviceController {
         this.audit = audit;
     }
 
-    @GetMapping("/api/sensors")
+    @GetMapping("/api/v1/sensors")
     public List<Map<String, Object>> list() {
         return jdbc.queryForList("""
                 SELECT id, device_id, kind, model, expected_interval_s, active, equipment_id, equipment_name,
@@ -53,7 +53,7 @@ public class DeviceController {
                 """); // never return secret_enc
     }
 
-    @PostMapping("/api/admin/sensors")
+    @PostMapping("/api/v1/admin/sensors")
     public Registered register(@RequestBody RegisterRequest r, Principal principal) {
         if (r.deviceId() == null || !r.deviceId().matches("[A-Za-z0-9_-]{3,64}")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "deviceId: 3-64 letters, digits, - or _");
@@ -77,7 +77,7 @@ public class DeviceController {
         return new Registered(r.deviceId(), secret, "Store this secret on the device now. It will not be shown again.");
     }
 
-    @PostMapping("/api/admin/sensors/{deviceId}/rotate-secret")
+    @PostMapping("/api/v1/admin/sensors/{deviceId}/rotate-secret")
     public Registered rotate(@PathVariable String deviceId, Principal principal) {
         String secret = SensorSecretCipher.newSecret();
         if (jdbc.update("UPDATE sensors SET secret_enc = ? WHERE device_id = ?", cipher.encrypt(secret), deviceId) == 0) {

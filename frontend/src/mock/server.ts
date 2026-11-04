@@ -66,7 +66,7 @@ async function handle(path: string, init: RequestInit): Promise<unknown> {
   const body = init.body ? JSON.parse(String(init.body)) : {};
   let m: RegExpMatchArray | null;
 
-  if (p === "/api/auth/login") {
+  if (p === "/api/v1/auth/login") {
     if (failedLogins >= 5) throw new ApiError(423, "Account locked after 5 failed sign-ins. Try again in 15 minutes.");
     if (body.password === "wrong") { failedLogins++; throw new ApiError(401, `Incorrect username or password. ${5 - failedLogins} attempts left.`); }
     const roles: Record<string, T.Role> = { admin: "ADMIN", manager: "MANAGER", operator: "OPERATOR", tech: "TECHNICIAN" };
@@ -74,49 +74,49 @@ async function handle(path: string, init: RequestInit): Promise<unknown> {
     sim.addAudit(body.username || "tech", "USER_LOGIN", "user", body.username || "tech");
     return { token: `mock.${r}`, expiresAt: iso(Date.now() + 8 * 3600e3), username: body.username || "tech", fullName: sim.ROLE_NAMES[r], role: r };
   }
-  if (p === "/api/equipment/status") return S.eq.map(status);
-  if ((m = p.match(/^\/api\/equipment\/(\d+)\/assessments$/))) {
+  if (p === "/api/v1/equipment/status") return S.eq.map(status);
+  if ((m = p.match(/^\/api\/v1\/equipment\/(\d+)\/assessments$/))) {
     const e = eqById(+m[1]); const minutes = +(qp.get("minutes") || 120);
     return e.hist.slice(-minutes).map((x: any) => ({ measuredAt: iso(x.ts), temperatureC: x.t, humidityPct: x.rh, surfaceTempC: x.surface, dewPointC: x.dew, marginC: x.surface - x.dew }));
   }
-  if ((m = p.match(/^\/api\/sensors\/(\d+)\/forecast$/))) {
+  if ((m = p.match(/^\/api\/v1\/sensors\/(\d+)\/forecast$/))) {
     const e = eqBySensor(+m[1]); const f = sim.forecast(e); const r = sim.riskOf(e);
     if (!f) throw new ApiError(404, "No recent readings");
     const crit = e.prof.mCrit;
     return { margin15C: f.m15, margin30C: f.m30, margin60C: f.m60, predictedCondensationAt: f.toCrit != null && f.toCrit < 60 ? iso(sim.now() + f.toCrit * 60000) : null,
       risk30: f.m30 <= crit ? 0.8 : 0.1, risk60: f.m60 <= crit ? 0.75 : 0.12, warn30: r.margin > crit && f.m30 <= crit, warn60: r.margin > crit && f.m60 <= crit, method: "trend", modelVersion: "mock-trend" };
   }
-  if (p === "/api/health/sensors") return S.eq.map(health);
-  if ((m = p.match(/^\/api\/health\/sensors\/(\d+)$/))) {
+  if (p === "/api/v1/health/sensors") return S.eq.map(health);
+  if ((m = p.match(/^\/api\/v1\/health\/sensors\/(\d+)$/))) {
     const e = eqBySensor(+m[1]);
     return { sensor: health(e), events: S.events.filter((x: any) => x.dev === e.dev).map(eventView), readings: e.hist.slice(-60).map((x: any) => ({ measuredAt: iso(x.ts), temperatureC: x.t, humidityPct: x.rh })) };
   }
-  if (p === "/api/health/events") return S.events.slice(0, +(qp.get("limit") || 50)).map(eventView);
-  if (p === "/api/health/services") return S.services.map((s: any) => ({ service: s.name, state: s.state, lastRunAt: iso(sim.now() - 2000), lastError: null, errorCount: 0 }));
-  if (p === "/api/sensors") return S.eq.map((e: any) => ({ id: sensorIdOf(e), deviceId: e.dev, kind: "SIMULATED", model: "SIM-SHT31", expectedIntervalS: 15, active: true, equipmentId: e.id, equipmentName: e.name, locationName: e.loc }));
-  if (p === "/api/admin/sensors" && method === "POST") {
+  if (p === "/api/v1/health/events") return S.events.slice(0, +(qp.get("limit") || 50)).map(eventView);
+  if (p === "/api/v1/health/services") return S.services.map((s: any) => ({ service: s.name, state: s.state, lastRunAt: iso(sim.now() - 2000), lastError: null, errorCount: 0 }));
+  if (p === "/api/v1/sensors") return S.eq.map((e: any) => ({ id: sensorIdOf(e), deviceId: e.dev, kind: "SIMULATED", model: "SIM-SHT31", expectedIntervalS: 15, active: true, equipmentId: e.id, equipmentName: e.name, locationName: e.loc }));
+  if (p === "/api/v1/admin/sensors" && method === "POST") {
     sim.addAudit(actor(), "SENSOR_REGISTERED", "sensor", body.deviceId);
     return { deviceId: body.deviceId, secret: Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"[b % 64]).join("") };
   }
-  if (p === "/api/admin/simulator") return S.eq.map((e: any) => ({ deviceId: e.dev, scenario: e.scenario, intervalSeconds: 15, lastHttpStatus: 202, sent: 0, failed: 0 }));
-  if (p === "/api/admin/simulator/scenarios") return sim.SCENARIOS.map(([name, description]: string[]) => ({ name, description }));
-  if ((m = p.match(/^\/api\/admin\/simulator\/([^/]+)\/scenario$/))) {
+  if (p === "/api/v1/admin/simulator") return S.eq.map((e: any) => ({ deviceId: e.dev, scenario: e.scenario, intervalSeconds: 15, lastHttpStatus: 202, sent: 0, failed: 0 }));
+  if (p === "/api/v1/admin/simulator/scenarios") return sim.SCENARIOS.map(([name, description]: string[]) => ({ name, description }));
+  if ((m = p.match(/^\/api\/v1\/admin\/simulator\/([^/]+)\/scenario$/))) {
     const e = S.eq.find((x: any) => x.dev === decodeURIComponent(m![1])); e.scenario = body.scenario; e.since = sim.now();
     sim.addAudit(actor(), "SIMULATOR_SCENARIO_SET", "sensor", e.dev); return { deviceId: e.dev, scenario: e.scenario };
   }
-  if (p === "/api/alerts") return S.alerts.map(alertView);
-  if ((m = p.match(/^\/api\/alerts\/(\d+)$/))) { const a = S.alerts.find((x: any) => x.id === +m![1]); return { alert: alertView(a), actions: a.actions.map(actionView) }; }
-  if ((m = p.match(/^\/api\/alerts\/(\d+)\/(acknowledge|resolve|actions)$/))) {
+  if (p === "/api/v1/alerts") return S.alerts.map(alertView);
+  if ((m = p.match(/^\/api\/v1\/alerts\/(\d+)$/))) { const a = S.alerts.find((x: any) => x.id === +m![1]); return { alert: alertView(a), actions: a.actions.map(actionView) }; }
+  if ((m = p.match(/^\/api\/v1\/alerts\/(\d+)\/(acknowledge|resolve|actions)$/))) {
     const a = S.alerts.find((x: any) => x.id === +m![1]); const who = actor();
     if (m[2] === "acknowledge") { if (a.status !== "OPEN") throw new ApiError(409, "Only open alerts can be acknowledged"); a.status = "ACKNOWLEDGED"; a.ack = sim.now(); a.ackBy = who; sim.addAudit(who, "ALERT_ACKNOWLEDGED", "alert", a.id); }
     if (m[2] === "resolve") { a.status = "RESOLVED"; a.resolved = sim.now(); a.resolvedBy = who; if (!a.ack) { a.ack = sim.now(); a.ackBy = who; } if (body.notes) a.actions.push({ type: "Resolution note", notes: body.notes, by: who, at: sim.now() }); sim.addAudit(who, "ALERT_RESOLVED", "alert", a.id); }
     if (m[2] === "actions") { a.actions.push({ type: body.actionType, notes: body.notes, by: who, at: sim.now() }); sim.addAudit(who, "CORRECTIVE_ACTION_LOGGED", "alert", a.id); return actionView(a.actions[a.actions.length - 1]); }
     return alertView(a);
   }
-  if (p === "/api/audit") return S.audit.map((a: any) => ({ id: a.id, occurredAt: iso(a.at), actorType: ["alerts", "sensor-health"].includes(a.actor) ? "SYSTEM" : "USER", actor: a.actor, action: a.action, entityType: a.entity, entityId: String(a.entityId), prevHash: a.prev, hash: S.tampered && a === S.audit[12] ? "e" + a.hash.slice(1) : a.hash }));
-  if (p === "/api/audit/verify") { await wait(900); return S.tampered ? { intact: false, checked: S.audit.length, firstBrokenId: S.audit[12].id } : { intact: true, checked: S.audit.length, firstBrokenId: null }; }
-  if (p === "/api/mock/tamper") { S.tampered = !!body.on; return { tampered: S.tampered }; }
-  if (p === "/api/reports/summary" || p === "/api/reports/summary.csv" || p === "/api/reports/summary.pdf") {
+  if (p === "/api/v1/audit") return S.audit.map((a: any) => ({ id: a.id, occurredAt: iso(a.at), actorType: ["alerts", "sensor-health"].includes(a.actor) ? "SYSTEM" : "USER", actor: a.actor, action: a.action, entityType: a.entity, entityId: String(a.entityId), prevHash: a.prev, hash: S.tampered && a === S.audit[12] ? "e" + a.hash.slice(1) : a.hash }));
+  if (p === "/api/v1/audit/verify") { await wait(900); return S.tampered ? { intact: false, checked: S.audit.length, firstBrokenId: S.audit[12].id } : { intact: true, checked: S.audit.length, firstBrokenId: null }; }
+  if (p === "/api/v1/mock/tamper") { S.tampered = !!body.on; return { tampered: S.tampered }; }
+  if (p === "/api/v1/reports/summary" || p === "/api/v1/reports/summary.csv" || p === "/api/v1/reports/summary.pdf") {
     const from = qp.get("from") ? Date.parse(qp.get("from")!) : null, to = qp.get("to") ? Date.parse(qp.get("to")!) : null, loc = qp.get("location");
     const eqIds = new Set(S.eq.filter((e: any) => !loc || e.loc === loc).map((e: any) => e.id));
     const al = S.alerts.filter((a: any) => eqIds.has(a.eqId) && (!from || a.opened >= from) && (!to || a.opened < to + 86400000));
@@ -130,8 +130,8 @@ async function handle(path: string, init: RequestInit): Promise<unknown> {
     if (p.endsWith(".pdf")) throw new ApiError(501, "PDF reports are generated by the backend (OpenPDF). The mock returns CSV only.");
     return summary;
   }
-  if (p === "/api/profiles") return Object.values(sim.PROFILES).map((x: any, i: number) => ({ id: i + 1, name: x.name, rhWarningPct: x.rhWarn, rhCriticalPct: x.rhCrit, marginWarningC: x.mWarn, marginCriticalC: x.mCrit, tempMinC: x.tMin, tempMaxC: x.tMax, surfaceOffsetC: x.offset }));
-  if (p === "/api/admin/users") return Object.entries(sim.ROLE_NAMES).map(([r, n]: [string, any], i) => ({ id: i + 1, username: ({ ADMIN: "admin", MANAGER: "manager", OPERATOR: "operator", TECHNICIAN: "tech" } as any)[r], fullName: n, email: null, role: r, enabled: true, lockedUntil: null, lastLoginAt: iso(sim.now() - (i + 1) * 3600e3) }));
+  if (p === "/api/v1/profiles") return Object.values(sim.PROFILES).map((x: any, i: number) => ({ id: i + 1, name: x.name, rhWarningPct: x.rhWarn, rhCriticalPct: x.rhCrit, marginWarningC: x.mWarn, marginCriticalC: x.mCrit, tempMinC: x.tMin, tempMaxC: x.tMax, surfaceOffsetC: x.offset }));
+  if (p === "/api/v1/admin/users") return Object.entries(sim.ROLE_NAMES).map(([r, n]: [string, any], i) => ({ id: i + 1, username: ({ ADMIN: "admin", MANAGER: "manager", OPERATOR: "operator", TECHNICIAN: "tech" } as any)[r], fullName: n, email: null, role: r, enabled: true, lockedUntil: null, lastLoginAt: iso(sim.now() - (i + 1) * 3600e3) }));
   throw new ApiError(404, `Mock has no handler for ${method} ${p}`);
 }
 
@@ -150,4 +150,4 @@ export function installMocks(onAlert: (title: string) => void) {
   const quietUntil = Date.now() + 6000;
   sim.onAlert((title: string) => { if (Date.now() > quietUntil) onAlert(title); });
 }
-export const mockTamper = (on: boolean) => handle("/api/mock/tamper", { method: "POST", body: JSON.stringify({ on }) });
+export const mockTamper = (on: boolean) => handle("/api/v1/mock/tamper", { method: "POST", body: JSON.stringify({ on }) });

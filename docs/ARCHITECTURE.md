@@ -53,8 +53,8 @@ The frontend supports both: `VITE_PLATFORM_URL` defaults to `VITE_API_URL`.
 | `ecp-common` | Magnus dew point (±0.5 °C target), HMAC signing, alert-signal and audit-event publishers, job heartbeats | JDBC only |
 | `ecp-simulator` | Simulated SHT31 sensors, 10 scenarios, scenario speed (demo 1.0, realistic 1/6), standalone CLI | no |
 | `ecp-forecast` | Ridge (Huber) margin forecaster + logistic early warning, trainer, bundled model | no |
-| `ecp-ingestion` | `POST /api/ingest/readings`: signature, timestamp, validation, batch insert, retention | yes |
-| `ecp-health` | Health rules, episodes with hysteresis, service watchdog, `/api/health/**` | yes |
+| `ecp-ingestion` | `POST /api/v1/ingest/readings`: signature, timestamp, validation, batch insert, retention | yes |
+| `ecp-health` | Health rules, episodes with hysteresis, service watchdog, `/api/v1/health/**` | yes |
 | `ecp-platform-app` | Runnable service: security (JWT validation), CORS, WebSocket, device registry, demo devices, embedded simulator, forecast API, Flyway (own history table) | yes |
 
 Pure-Java domain code (rules, simulator, forecaster, maths) has no framework dependency, so it is easy to test and

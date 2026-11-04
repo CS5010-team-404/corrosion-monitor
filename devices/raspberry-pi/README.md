@@ -10,7 +10,7 @@ want one real device in the demo.
 2. On the Pi: copy `sender.py` and `corrosion-watch.service` to `/home/pi/corrosion-watch/`, `pip install smbus2`.
 3. Create `/home/pi/corrosion-watch/device.env`:
    ```
-   ECP_INGEST_URL=https://corrosion-watch-platform.onrender.com/api/ingest/readings
+   ECP_INGEST_URL=https://corrosion-watch-platform.onrender.com/api/v1/ingest/readings
    ECP_DEVICE_ID=PI-001
    ECP_DEVICE_SECRET=the-key-you-copied
    ```

@@ -19,14 +19,14 @@ public class ForecastController {
     }
 
     /** Margin forecast at 15/30/60 minutes and early-warning probabilities for one sensor. */
-    @GetMapping("/api/sensors/{sensorId}/forecast")
+    @GetMapping("/api/v1/sensors/{sensorId}/forecast")
     public Forecast forecast(@PathVariable long sensorId, @RequestParam(required = false) Double offset) {
         return service.forSensor(sensorId, offset)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No recent readings for sensor " + sensorId));
     }
 
     /** Version and evaluation metrics of the bundled model (shown on the equipment page and in the report). */
-    @GetMapping("/api/forecast/model")
+    @GetMapping("/api/v1/forecast/model")
     public Map<String, Object> model() {
         return Map.of("version", service.model().version(), "metrics", service.model().metrics());
     }

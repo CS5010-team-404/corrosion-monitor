@@ -19,7 +19,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 /** Read API for the Sensor Health page. Any signed-in role may read it. */
 @RestController
-@RequestMapping("/api/health")
+@RequestMapping("/api/v1/health")
 public class SensorHealthController {
 
     private final HealthQueries queries;

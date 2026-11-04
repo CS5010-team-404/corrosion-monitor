@@ -21,5 +21,5 @@ export const config = {
 };
 
 /** Paths served by the data platform rather than the team backend. */
-export const PLATFORM_PATHS = ["/api/ingest", "/api/health", "/api/admin/simulator", "/api/admin/sensors", "/api/sensors", "/api/forecast"];
+export const PLATFORM_PATHS = ["/api/v1/ingest", "/api/v1/health", "/api/v1/admin/simulator", "/api/v1/admin/sensors", "/api/v1/sensors", "/api/v1/forecast"];
 export const isPlatformPath = (path: string) => PLATFORM_PATHS.some((p) => path.startsWith(p));

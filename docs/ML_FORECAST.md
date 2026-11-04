@@ -54,5 +54,5 @@ Forecast f = model.forecast(lastFortyFiveMinutesPerMinute);   // List<MarginPoin
 // store f.margin15C/30C/60C and f.predictedCondensationAt in risk_assessments;
 // when f.warn30() || f.warn60(), insert alert_signals CONDENSATION_FORECAST (WARNING), clear when it stops
 ```
-Or call the platform's `GET /api/sensors/{id}/forecast`. Retrain with `scripts/train-model.sh`; the report and
+Or call the platform's `GET /api/v1/sensors/{id}/forecast`. Retrain with `scripts/train-model.sh`; the report and
 model file are regenerated in `ecp-forecast/src/main/resources/models/`.

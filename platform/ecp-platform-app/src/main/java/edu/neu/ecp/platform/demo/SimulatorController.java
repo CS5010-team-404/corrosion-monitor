@@ -19,7 +19,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 /** Administration → Simulator: switch a simulated device into a failure during the demo. */
 @RestController
-@RequestMapping("/api/admin/simulator")
+@RequestMapping("/api/v1/admin/simulator")
 public class SimulatorController {
 
     public record ScenarioRequest(String scenario) {

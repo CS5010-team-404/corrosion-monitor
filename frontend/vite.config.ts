@@ -9,7 +9,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const api = env.DEV_API_URL || "http://localhost:8080";
   const platform = env.DEV_PLATFORM_URL || "http://localhost:8081";
-  const toPlatform = ["/api/ingest", "/api/health", "/api/admin/simulator", "/api/admin/sensors", "/api/sensors", "/api/forecast"];
+  const toPlatform = ["/api/v1/ingest", "/api/v1/health", "/api/v1/admin/simulator", "/api/v1/admin/sensors", "/api/v1/sensors", "/api/v1/forecast"];
   return {
     plugins: [react()],
     server: {

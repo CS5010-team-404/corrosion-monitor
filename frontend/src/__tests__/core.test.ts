@@ -25,8 +25,8 @@ describe("router", () => {
 
 describe("api routing", () => {
   it("sends platform paths to the data platform", () => {
-    expect(isPlatformPath("/api/health/sensors")).toBe(true);
-    expect(isPlatformPath("/api/admin/simulator/SIM-001/scenario")).toBe(true);
-    expect(isPlatformPath("/api/alerts")).toBe(false);
+    expect(isPlatformPath("/api/v1/health/sensors")).toBe(true);
+    expect(isPlatformPath("/api/v1/admin/simulator/SIM-001/scenario")).toBe(true);
+    expect(isPlatformPath("/api/v1/alerts")).toBe(false);
   });
 });

@@ -7,7 +7,7 @@ import java.time.Duration;
  * Standalone simulator (the app also embeds one; see EmbeddedSimulator). Useful against a deployed server.
  *
  * <pre>
- *   ECP_INGEST_URL=https://corrosion-watch-platform.onrender.com/api/ingest/readings \
+ *   ECP_INGEST_URL=https://corrosion-watch-platform.onrender.com/api/v1/ingest/readings \
  *   ECP_SIM_SENSORS="SIM-001=secret1,SIM-002=secret2" \
  *   ECP_SIM_INTERVAL_S=15 \
  *   mvn -q -pl ecp-simulator -am exec:java
@@ -20,7 +20,7 @@ public final class SimulatorMain {
     }
 
     public static void main(String[] args) throws InterruptedException {
-        String url = env("ECP_INGEST_URL", "http://localhost:8081/api/ingest/readings");
+        String url = env("ECP_INGEST_URL", "http://localhost:8081/api/v1/ingest/readings");
         String sensors = env("ECP_SIM_SENSORS", "");
         int interval = Integer.parseInt(env("ECP_SIM_INTERVAL_S", "15"));
         if (sensors.isBlank()) {

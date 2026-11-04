@@ -8,6 +8,6 @@ SEQ="${SEQ:-$(date +%s)}"
 NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)"; TS="$(date -u +%s)"
 BODY="{\"readings\":[{\"seq\":${SEQ},\"measuredAt\":\"${NOW}\",\"temperatureC\":${TEMP},\"humidityPct\":${RH}}]}"
 SIG="$(printf '%s' "${TS}.${BODY}" | openssl dgst -sha256 -hmac "${SECRET}" -hex | sed 's/^.* //')"
-curl -sS -w '\nHTTP %{http_code}\n' -X POST "${BASE}/api/ingest/readings" \
+curl -sS -w '\nHTTP %{http_code}\n' -X POST "${BASE}/api/v1/ingest/readings" \
   -H 'Content-Type: application/json' -H "X-Device-Id: ${DEVICE}" -H "X-Timestamp: ${TS}" -H "X-Signature: ${SIG}" \
   --data-binary "${BODY}"

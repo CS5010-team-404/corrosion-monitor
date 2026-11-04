@@ -65,7 +65,7 @@ public class EmbeddedSimulator {
         if (devices.isEmpty()) {
             return;
         }
-        SimulatorEngine e = new SimulatorEngine(new HttpReadingSender("http://localhost:" + port + "/api/ingest/readings"), clock, 2);
+        SimulatorEngine e = new SimulatorEngine(new HttpReadingSender("http://localhost:" + port + "/api/v1/ingest/readings"), clock, 2);
         for (Dev d : devices) {
             long lastSeq = Optional.ofNullable(jdbc.queryForObject("SELECT MAX(seq_no) FROM readings WHERE sensor_id = ?",
                     Long.class, d.id())).orElse(0L);

@@ -26,7 +26,7 @@ public class CorsConfig {
         c.setAllowedHeaders(List.of("Authorization", "Content-Type"));
         c.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/api/**", c);
+        source.registerCorsConfiguration("/api/v1/**", c);
         return source;
     }
 }

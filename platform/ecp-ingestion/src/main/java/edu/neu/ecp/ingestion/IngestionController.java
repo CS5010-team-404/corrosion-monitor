@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
  * Device endpoint. Authenticated by HMAC signature, not by user login (see Hmac in ecp-common).
  *
  * <pre>
- * POST /api/ingest/readings
+ * POST /api/v1/ingest/readings
  * X-Device-Id: SIM-001
  * X-Timestamp: 1761840000
  * X-Signature: 3f1c...
@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
  * Responds 202 with counts, or 400/401/403 with the rejection reason.
  */
 @RestController
-@RequestMapping("/api/ingest")
+@RequestMapping("/api/v1/ingest")
 public class IngestionController {
 
     private final IngestionService service;
