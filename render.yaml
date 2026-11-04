@@ -5,8 +5,7 @@
 #   corrosion-watch-web       React frontend (static site, free, on Render's CDN)
 #
 # All three share one MySQL database (Aiven free tier) and one JWT secret, so a single sign-in works everywhere.
-# Before the first deploy, check the backend block against the team's actual Dockerfile and env var names
-# (Claude Code phase 1 does this). If the backend already exists on Render, use its exact service name.
+# The backend creates the schema with Flyway on startup; the platform adds its own tables. See docs/DEPLOYMENT.md.
 # Cost: two Starter web services ($7/month each) from the $100 credit; the static site is free.
 
 envVarGroups:
@@ -16,26 +15,29 @@ envVarGroups:
         generateValue: true
 
 services:
-  # ---------------------------------------------------------------- team backend (existing code)
+  # ---------------------------------------------------------------- team backend
+  # Env var names are the ones backend/src/main/resources/application.properties reads.
   - type: web
     name: corrosion-watch-api
     runtime: docker
     plan: starter
-    dockerfilePath: ./Dockerfile     # adjust to the backend's Dockerfile
-    dockerContext: .
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .                 # repository root: the backend inherits the root pom
     healthCheckPath: /actuator/health
     buildFilter:
       ignoredPaths: ["frontend/**", "platform/**", "docs/**", "devices/**", "scripts/**"]
     envVars:
-      - fromGroup: corrosion-watch-shared
-      - key: ECP_DB_URL              # jdbc:mysql://HOST:PORT/defaultdb?sslMode=REQUIRED&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
+      - fromGroup: corrosion-watch-shared   # ECP_JWT_SECRET: signs tokens; the platform validates them
+      - key: DB_URL                  # jdbc:mysql://HOST:PORT/defaultdb?sslMode=REQUIRED&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
         sync: false
-      - key: ECP_DB_USER
+      - key: MYSQL_USER
         sync: false
-      - key: ECP_DB_PASSWORD
+      - key: MYSQL_PASSWORD
         sync: false
-      - key: ECP_DB_POOL             # Aiven free tier allows few connections; keep pools small
+      - key: DB_POOL                 # Aiven free tier allows few connections; keep pools small
         value: "5"
+      - key: ECP_DEMO_PASSWORD       # password for the four demo users created on an empty app_user
+        sync: false
       - key: FRONTEND_HOST
         fromService: { type: web, name: corrosion-watch-web, property: host }
 
