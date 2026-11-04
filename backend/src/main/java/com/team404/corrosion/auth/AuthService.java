@@ -3,6 +3,7 @@ package com.team404.corrosion.auth;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Locale;
+import java.util.Map;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,13 +28,15 @@ public class AuthService {
 
     private final AppUserRepository users;
     private final PasswordEncoder passwords;
+    private final LoginAudit audit;
     private final Clock clock;
     private final LoginPolicy policy = new LoginPolicy();
     private final String dummyHash;
 
-    public AuthService(AppUserRepository users, PasswordEncoder passwords, Clock clock) {
+    public AuthService(AppUserRepository users, PasswordEncoder passwords, LoginAudit audit, Clock clock) {
         this.users = users;
         this.passwords = passwords;
+        this.audit = audit;
         this.clock = clock;
         // Compared against for unknown emails, so their response takes as long as a wrong password.
         this.dummyHash = passwords.encode("not-a-real-password-" + System.nanoTime());
@@ -49,6 +52,7 @@ public class AuthService {
         var found = users.findForLoginByEmail(email);
         if (found.isEmpty()) {
             passwords.matches(password, dummyHash);
+            audit.record(LoginAudit.USER_LOGIN_FAILED, email, null, Map.of("reason", "UNKNOWN_USER"));
             return new LoginResult.BadCredentials(email, null, true);
         }
         AppUser user = found.get();
@@ -58,11 +62,31 @@ public class AuthService {
         boolean matches = !before.lockedAt(now) && passwords.matches(password, user.getPasswordHash());
         LoginPolicy.Decision decision = policy.decide(before, matches, now);
         user.applyLoginState(decision.next());
+        Long id = user.getId();
+        String who = user.getEmail();
         return switch (decision.outcome()) {
-            case SUCCESS -> new LoginResult.Success(user);
-            case BAD_CREDENTIALS -> new LoginResult.BadCredentials(email, user.getId(), false);
-            case LOCKED -> new LoginResult.Locked(user, before.lockedUntil(), false);
-            case NEWLY_LOCKED -> new LoginResult.Locked(user, decision.next().lockedUntil(), true);
+            case SUCCESS -> {
+                audit.record(LoginAudit.USER_LOGIN, who, id, Map.of("role", user.getRole().name()));
+                yield new LoginResult.Success(user);
+            }
+            case BAD_CREDENTIALS -> {
+                audit.record(LoginAudit.USER_LOGIN_FAILED, who, id,
+                        Map.of("reason", "BAD_CREDENTIALS", "failedLogins", decision.next().failedLogins()));
+                yield new LoginResult.BadCredentials(email, id, false);
+            }
+            case LOCKED -> {
+                audit.record(LoginAudit.USER_LOGIN_FAILED, who, id,
+                        Map.of("reason", "LOCKED", "lockedUntil", before.lockedUntil().toString()));
+                yield new LoginResult.Locked(user, before.lockedUntil(), false);
+            }
+            case NEWLY_LOCKED -> {
+                Instant until = decision.next().lockedUntil();
+                audit.record(LoginAudit.USER_LOGIN_FAILED, who, id,
+                        Map.of("reason", "BAD_CREDENTIALS", "failedLogins", decision.next().failedLogins()));
+                audit.record(LoginAudit.ACCOUNT_LOCKED, who, id,
+                        Map.of("failedLogins", decision.next().failedLogins(), "lockedUntil", until.toString()));
+                yield new LoginResult.Locked(user, until, true);
+            }
         };
     }
 }
