@@ -3,7 +3,7 @@ spring:
   application:
     name: ecp-platform
   datasource:
-    url: ${ECP_DB_URL:jdbc:mysql://localhost:3306/ecp?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true&useSSL=false}
+    url: ${ECP_DB_URL:jdbc:mysql://localhost:3306/corrosion_monitor?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true&useSSL=false}
     username: ${ECP_DB_USER:ecp}
     password: ${ECP_DB_PASSWORD:ecp}
     hikari:

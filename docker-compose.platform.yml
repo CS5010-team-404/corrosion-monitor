@@ -6,7 +6,7 @@ services:
   mysql:
     image: mysql:8.4
     environment:
-      MYSQL_DATABASE: ecp
+      MYSQL_DATABASE: corrosion_monitor
       MYSQL_USER: ecp
       MYSQL_PASSWORD: ecp
       MYSQL_ROOT_PASSWORD: root
@@ -21,7 +21,7 @@ services:
     build: { context: ., dockerfile: deploy/platform.Dockerfile }
     depends_on: { mysql: { condition: service_healthy } }
     environment:
-      ECP_DB_URL: jdbc:mysql://mysql:3306/ecp?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true&useSSL=false
+      ECP_DB_URL: jdbc:mysql://mysql:3306/corrosion_monitor?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true&useSSL=false
       ECP_DB_USER: ecp
       ECP_DB_PASSWORD: ecp
       ECP_PLATFORM_AUTH: none        # local only; on Render it validates the team backend's JWT
