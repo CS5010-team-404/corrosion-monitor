@@ -50,7 +50,7 @@ export SENSOR_SECRET=<value from your .env>
 mvn -pl simulator exec:java
 ```
 
-The database schema in `db/schema.sql` loads automatically the first time MySQL starts. To reload it, run `docker compose down -v` and start again.
+The backend creates the database schema with Flyway on startup (`backend/src/main/resources/db/migration`). Schema changes are a new `V<n>__description.sql` file in a pull request, announced to the team.
 
 ## Branching
 
