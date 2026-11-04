@@ -1,0 +1,5 @@
+# Tokens issued by the backend's TokenService (backend TokenFixtureTest) with the test-only secret in
+# that test and a clock fixed at 2099-01-01T00:00:00Z. Read by the platform's
+# BackendTokenCompatibilityTest. Regenerate with -DregenerateTokenFixture=true; keep both copies identical.
+TECHNICIAN=eyJhbGciOiJIUzI1NiJ9.eyJuYW1lIjoiVGFyaXEgVGVjaG5pY2lhbiIsInN1YiI6InRlY2hAY29ycm9zaW9ud2F0Y2guYXBwIiwiZXhwIjo0MDcwOTM3NjAwLCJpYXQiOjQwNzA5MDg4MDAsInJvbGVzIjpbIlRFQ0hOSUNJQU4iXX0.At2Cm1FTweqPUDJcy-aFYRYbZV5h-YucPhI7wMUwxbA
+ADMIN=eyJhbGciOiJIUzI1NiJ9.eyJuYW1lIjoiQXZlcnkgQWRtaW4iLCJzdWIiOiJhZG1pbkBjb3Jyb3Npb253YXRjaC5hcHAiLCJleHAiOjQwNzA5Mzc2MDAsImlhdCI6NDA3MDkwODgwMCwicm9sZXMiOlsiQURNSU4iXX0.w9iRHTKTmYWOAVWL3u5-4OOxaZ6aHWVTQibkKyaccMY
