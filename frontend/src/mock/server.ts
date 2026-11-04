@@ -3,15 +3,18 @@
 import { ApiError, setMockHandler } from "../lib/api";
 import { setClock } from "../lib/format";
 import type * as T from "../api/types";
-import { sim } from "./sim.js";
+import { sim as simJs } from "./sim.js";
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// sim.js is untyped (@ts-nocheck); TypeScript would infer its state from the initial values ({} and []), so treat it
+// as dynamic here. The T.* return types below still check what the mock sends to the pages.
+const sim: any = simJs;
 const { S } = sim;
 const iso = (t: number | null | undefined) => (t == null ? null : new Date(t).toISOString());
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 let failedLogins = 0;
 let actionSeq = 1;
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 const eqById = (id: number) => S.eq.find((e: any) => e.id === id);
 const sensorIdOf = (e: any) => S.eq.indexOf(e) + 1;
 const eqBySensor = (sensorId: number) => S.eq[sensorId - 1];
