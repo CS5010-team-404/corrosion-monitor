@@ -4,7 +4,7 @@
 # service here (port 8080, same database) so the whole system runs together; see docs/DEPLOYMENT.md.
 services:
   mysql:
-    image: mysql:8.4
+    image: mysql:8.0
     environment:
       MYSQL_DATABASE: corrosion_monitor
       MYSQL_USER: ecp
