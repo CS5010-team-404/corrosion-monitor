@@ -6,7 +6,7 @@ import type { Role, Session } from "../api/types";
 const KEY = "cw.session";
 interface AuthValue {
   session: Session | null;
-  login: (username: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   can: (...roles: Role[]) => boolean;
   switchRole?: (role: Role) => void;
@@ -25,8 +25,8 @@ export function AuthProvider({ children, allowRoleSwitch }: { children: ReactNod
   }, []);
   const value = useMemo<AuthValue>(() => ({
     session,
-    async login(username, password) {
-      const r = await apiLogin(username, password);
+    async login(email, password) {
+      const r = await apiLogin(email, password);
       tokenStore.set(r.token);
       const s: Session = { username: r.username, fullName: r.fullName, role: r.role };
       sessionStorage.setItem(KEY, JSON.stringify(s));

@@ -10,7 +10,7 @@ const SCENE = `<ellipse cx="260" cy="338" rx="210" ry="12" fill="#1f5fe0" opacit
 
 export function Login() {
   const { login } = useAuth();
-  const [username, setUsername] = useState(config.useMocks ? "tech" : "");
+  const [email, setEmail] = useState(config.useMocks ? "tech@corrosionwatch.app" : "");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -18,7 +18,7 @@ export function Login() {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    try { await login(username, password); } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
+    try { await login(email, password); } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
   };
   return (
     <main className="login">
@@ -31,11 +31,11 @@ export function Login() {
           <div className="brand" style={{ padding: "0 0 10px" }}><span className="mark"><Icon name="drop" /></span>Corrosion Watch</div>
           <span className="tag">Early warning for electronics</span>
           <div><h1>Welcome back</h1><p className="muted" style={{ margin: "6px 0 0" }}>Sign in to monitor your equipment.</p></div>
-          <label className="field">Username<div className="input-icon"><Icon name="user" /><input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" required /></div></label>
+          <label className="field">Email<div className="input-icon"><Icon name="user" /><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" required /></div></label>
           <label className="field">Password<div className="input-icon"><Icon name="lock" /><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" placeholder="••••••••" required /></div></label>
           {error && <p className="err" role="alert"><Icon name="alert" />{error}</p>}
           <Button variant="primary" className="block" busy={busy} type="submit">{busy ? "Signing in" : "Sign in"}</Button>
-          {config.useMocks && <p className="help">Mock backend: sign in as tech, operator, manager or admin with any password. Type “wrong” to see the lockout.</p>}
+          {config.useMocks && <p className="help">Mock backend: sign in as tech@, operator@, manager@ or admin@corrosionwatch.app with any password. Type “wrong” to see the lockout.</p>}
         </form>
       </div>
     </main>

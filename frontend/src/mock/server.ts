@@ -70,12 +70,20 @@ async function handle(path: string, init: RequestInit): Promise<unknown> {
   let m: RegExpMatchArray | null;
 
   if (p === "/api/v1/auth/login") {
-    if (failedLogins >= 5) throw new ApiError(423, "Account locked after 5 failed sign-ins. Try again in 15 minutes.");
-    if (body.password === "wrong") { failedLogins++; throw new ApiError(401, `Incorrect username or password. ${5 - failedLogins} attempts left.`); }
-    const roles: Record<string, T.Role> = { admin: "ADMIN", manager: "MANAGER", operator: "OPERATOR", tech: "TECHNICIAN" };
-    const r = roles[String(body.username).toLowerCase()] ?? "TECHNICIAN";
-    sim.addAudit(body.username || "tech", "USER_LOGIN", "user", body.username || "tech");
-    return { token: `mock.${r}`, expiresAt: iso(Date.now() + 8 * 3600e3), username: body.username || "tech", fullName: sim.ROLE_NAMES[r], role: r };
+    // Same contract as the backend: the four demo emails (any password here), one message for unknown email and
+    // wrong password, and the fifth failure locks the account (423). The password "wrong" counts as a failure.
+    const locked = () => new ApiError(423, `Account locked after 5 failed sign-ins. Try again after ${iso(Date.now() + 15 * 60e3)} (UTC).`);
+    if (failedLogins >= 5) throw locked();
+    const roles: Record<string, T.Role> = { "admin@corrosionwatch.app": "ADMIN", "manager@corrosionwatch.app": "MANAGER", "operator@corrosionwatch.app": "OPERATOR", "tech@corrosionwatch.app": "TECHNICIAN" };
+    const email = String(body.email ?? "").trim().toLowerCase();
+    const r = roles[email];
+    if (!r || body.password === "wrong") {
+      if (++failedLogins >= 5) throw locked();
+      throw new ApiError(401, "Incorrect email or password.");
+    }
+    failedLogins = 0;
+    sim.addAudit(email, "USER_LOGIN", "user", email);
+    return { token: `mock.${r}`, expiresAt: iso(Date.now() + 8 * 3600e3), email, fullName: sim.ROLE_NAMES[r], role: r };
   }
   if (p === "/api/v1/equipment/status") return S.eq.map(status);
   if ((m = p.match(/^\/api\/v1\/equipment\/(\d+)\/assessments$/))) {

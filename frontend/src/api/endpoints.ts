@@ -10,8 +10,12 @@ const q = (params: Record<string, string | number | undefined | null>) => {
   return str ? `?${str}` : "";
 };
 
-// auth (team backend)
-export const login = (username: string, password: string) => post<T.LoginResult>("/api/v1/auth/login", { username, password });
+// auth (team backend): sign in with email; the session shows the email as the username
+interface LoginResponse { token: string; expiresAt: string; email: string; fullName: string; role: T.Role; }
+export const login = async (email: string, password: string): Promise<T.LoginResult> => {
+  const r = await post<LoginResponse>("/api/v1/auth/login", { email, password });
+  return { token: r.token, expiresAt: r.expiresAt, username: r.email, fullName: r.fullName, role: r.role };
+};
 
 // analytics (Aayushee)
 export const equipmentStatus = () => api<T.EquipmentStatus[]>("/api/v1/equipment/status");
