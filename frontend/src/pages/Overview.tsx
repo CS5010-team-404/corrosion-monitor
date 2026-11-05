@@ -76,7 +76,7 @@ export function Overview() {
           <div className="card-head" style={{ padding: "20px 20px 0", marginBottom: 14 }}><h2>Right now</h2>{top && <Link className="small" to={`/equipment/${top.equipmentId}`}>Details</Link>}</div>
           <div className="mini">
             <div><div className="k">At risk</div><div className={`v num ${atRisk ? "t-warn" : ""}`}>{atRisk}<small>/ {rows.length}</small></div><div className="c">warning or critical</div></div>
-            <div><div className="k">Open alerts</div><div className="v num">{active.length}</div><div className="c">{active.filter((a) => a.status === "OPEN").length} not acknowledged</div></div>
+            <div><div className="k">Open alerts</div><div className="v num">{al.error ? "–" : active.length}</div><div className="c">{al.error ? "alerts unavailable" : `${active.filter((a) => a.status === "OPEN").length} not acknowledged`}</div></div>
             <div><div className="k">Sensors trusted</div><div className="v num">{trusted.length}<small>/ {rows.length}</small></div><div className="c">{rows.length - trusted.length ? `${rows.length - trusted.length} ignored` : "all reporting"}</div></div>
             <div><div className="k">Average humidity</div><div className="v num">{fmt(avgRh, 0)}<small>%</small></div><div className="c">trusted sensors</div></div>
           </div>

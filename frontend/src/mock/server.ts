@@ -161,4 +161,12 @@ export function installMocks(onAlert: (title: string) => void) {
   const quietUntil = Date.now() + 6000;
   sim.onAlert((title: string) => { if (Date.now() > quietUntil) onAlert(title); });
 }
-export const mockTamper = (on: boolean) => handle("/api/v1/mock/tamper", { method: "POST", body: JSON.stringify({ on }) });
+/**
+ * VITE_MOCK_FALLBACK: answers only the endpoints that returned 404/501 on the real services (lib/api.ts decides),
+ * so the simulation runs in the background but never replaces a real endpoint or the real clock.
+ */
+export async function mockFallback(path: string, init: RequestInit): Promise<unknown> {
+  sim.start();
+  return handle(path, init);
+}
+export const mockTamper =(on: boolean) => handle("/api/v1/mock/tamper", { method: "POST", body: JSON.stringify({ on }) });

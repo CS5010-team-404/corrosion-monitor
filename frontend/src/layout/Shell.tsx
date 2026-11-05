@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { alerts as fetchAlerts, equipmentStatus } from "../api/endpoints";
 import type { Role } from "../api/types";
 import { Icon } from "../components/Icon";
 import { Menu, useOutside } from "../components/Dropdown";
+import { SampleBadge } from "../components/ui";
+import { isNotBuilt, sampleSources } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { config } from "../lib/config";
 import { ago, label, time, now } from "../lib/format";
 import { Link, useRouter } from "../lib/router";
-import { useAsync } from "../lib/useAsync";
+import { useAsync, usePageUsesSample } from "../lib/useAsync";
 import { useLive } from "../lib/live";
 
 const ALL: Role[] = ["TECHNICIAN", "OPERATOR", "MANAGER", "ADMIN"];
@@ -36,9 +38,13 @@ export function Shell({ children }: { children: ReactNode }) {
   const { session, logout, switchRole } = useAuth();
   const { path, navigate } = useRouter();
   const role = session!.role;
-  const alertsQ = useAsync(() => fetchAlerts("ACTIVE", 50), [], config.useMocks ? 4000 : 15000);
-  const eqQ = useAsync(equipmentStatus, [], 30000);
+  // Layout queries ("ambient"): they feed the alerts badge and search, so they don't mark the page as sample data.
+  const alertsQ = useAsync(() => fetchAlerts("ACTIVE", 50), [], config.useMocks ? 4000 : 15000, { ambient: true });
+  const eqQ = useAsync(equipmentStatus, [], 30000, { ambient: true });
   useLive("/topic/alerts", () => alertsQ.reload());
+  const alertsMissing = isNotBuilt(alertsQ.error);  // alerts endpoint not built: no badge, no "all caught up"
+  const sampleOnPage = usePageUsesSample();
+  const samples = useSyncExternalStore(sampleSources.subscribe, sampleSources.get);
   const active = (alertsQ.data ?? []).filter((a) => a.status !== "RESOLVED");
   const open = active.filter((a) => a.status === "OPEN");
   const items = NAV.filter((n) => n.roles.includes(role));
@@ -83,7 +89,13 @@ export function Shell({ children }: { children: ReactNode }) {
           {items.some((n) => n.group === "manage") && <div className="nav-label">Manage</div>}
           {items.filter((n) => n.group === "manage").map(link)}
         </nav>
-        <div className="side-foot"><div className="status-card"><div className="row1">{config.useMocks ? "Demo data" : "Connected"}</div><p>{config.useMocks ? "Running on the built-in mock backend." : `Last sync ${time(now())}.`}</p></div></div>
+        <div className="side-foot">
+          {samples.length > 0 ? (
+            <div className="status-card sample"><div className="row1">Sample data in use</div><p>Not built yet, shown with sample data: {samples.map((x) => x.what.replace(/^The /, "").toLowerCase()).join(", ")}.</p></div>
+          ) : (
+            <div className="status-card"><div className="row1">{config.useMocks ? "Demo data" : "Connected"}</div><p>{config.useMocks ? "Running on the built-in mock backend." : `Last sync ${time(now())}.`}</p></div>
+          )}
+        </div>
       </aside>
       <div className="main">
         <header className="topbar">
@@ -100,13 +112,13 @@ export function Shell({ children }: { children: ReactNode }) {
           <Menu width={340} trigger={(toggle) => <button className="icon-btn" onClick={toggle} aria-label="Notifications"><Icon name="bell" />{open.length > 0 && <span className="dot" />}</button>}>
             {(close) => (
               <>
-                <div className="row between" style={{ padding: "8px 10px 6px" }}><b>Notifications</b><span className="small muted">{open.length} open</span></div>
+                <div className="row between" style={{ padding: "8px 10px 6px" }}><b>Notifications</b>{!alertsMissing && <span className="small muted">{open.length} open</span>}</div>
                 {active.slice(0, 5).map((a) => (
                   <button key={a.id} className="opt" style={{ whiteSpace: "normal" }} onClick={() => { close(); navigate(`/alerts?alert=${a.id}`); }}>
                     <span className="ck"><Icon name={a.severity === "CRITICAL" ? "alert" : "info"} /></span><span>{a.title}<span className="desc">{ago(a.openedAt)}, {label(a.status).toLowerCase()}</span></span>
                   </button>
                 ))}
-                {!active.length && <div className="opt muted" style={{ cursor: "default" }}>You are all caught up.</div>}
+                {!active.length && <div className="opt muted" style={{ cursor: "default", whiteSpace: "normal" }}>{alertsMissing ? "Alerts aren't available yet." : "You are all caught up."}</div>}
                 <hr /><button className="opt" style={{ justifyContent: "center", color: "var(--accent)", fontWeight: 600 }} onClick={() => { close(); navigate("/alerts"); }}>View all alerts</button>
               </>
             )}
@@ -124,7 +136,7 @@ export function Shell({ children }: { children: ReactNode }) {
             )}
           </Menu>
         </header>
-        <div className="content">{children}</div>
+        <div className="content">{sampleOnPage && <div className="sample-bar"><SampleBadge /></div>}{children}</div>
       </div>
       <nav className="tabbar" aria-label="Main">
         {items.slice(0, 5).map((n) => <Link key={n.to} to={n.to} aria-label={n.label} aria-current={current(n.to) ? "page" : undefined}><Icon name={n.icon} />{n.to === "/alerts" && open.length > 0 && !current(n.to) && <span className="count" />}</Link>)}

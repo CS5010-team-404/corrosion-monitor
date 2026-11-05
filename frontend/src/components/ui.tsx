@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from "react";
+import { NotBuiltError } from "../lib/api";
 import { label, type Tone } from "../lib/format";
 import { Icon } from "./Icon";
 
@@ -49,7 +50,22 @@ export function Empty({ title, text, icon = "search" }: { title: string; text?: 
   return <div className="empty"><div className="circ"><Icon name={icon} /></div><b>{title}</b>{text}</div>;
 }
 
+/** Calm panel for a part of the app whose endpoint a teammate hasn't built yet (404/501). */
+export function NotBuilt({ error }: { error: NotBuiltError }) {
+  return (
+    <div className="card"><div className="empty"><div className="circ"><Icon name="clock" /></div><b>Not built yet</b>{error.message}
+      <div className="small" style={{ marginTop: 8 }}>This page fills in once the endpoint is deployed; reload to check again.</div></div></div>
+  );
+}
+
+/** Shown on every page that is using sample data from the mock fallback (VITE_MOCK_FALLBACK=true). */
+export function SampleBadge() {
+  return <Badge tone="warn" text="Sample data: this part isn't built yet" />;
+}
+
+/** Error state for a page or panel; an endpoint that isn't built yet gets the calm NotBuilt panel instead. */
 export function ErrorState({ error, onRetry }: { error: Error; onRetry: () => void }) {
+  if (error instanceof NotBuiltError) return <NotBuilt error={error} />;
   return (
     <div className="card"><div className="empty"><div className="circ" style={{ color: "var(--crit)" }}><Icon name="alert" /></div><b>Could not load this page</b>{error.message}
       <div style={{ marginTop: 14 }}><Button size="sm" onClick={onRetry}><Icon name="refresh" />Try again</Button></div></div></div>
