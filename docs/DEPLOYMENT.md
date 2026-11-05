@@ -59,6 +59,13 @@ public addresses shown at the top of each service's page in the Render dashboard
 The `VITE_*` values are built into the static site, so after changing them run Manual Deploy → "Clear build cache &
 deploy" on corrosion-watch-web. A wrong `FRONTEND_HOST` shows up in the browser as a CORS error on sign-in.
 
+**Optional frontend flags** (corrosion-watch-web → Environment; both default to `false`, rebuild after changing):
+- `VITE_BACKEND_LIVE=true` once the team backend serves `/ws`; until then only the platform WebSocket connects.
+- `VITE_MOCK_FALLBACK=true` for a demo before teammates' endpoints exist: those that answer 404/501 are filled with
+  sample data from the built-in mock, every page using it shows "Sample data: this part isn't built yet", and the
+  sidebar lists what is sample. Real endpoints are never replaced. Leave it off otherwise, so missing parts show as
+  "Not built yet" with the endpoint and its owner (`frontend/README.md`).
+
 ## 4. Check the database migrations (optional, before or after the first deploy)
 `scripts/check-aiven.sh` runs the backend's Flyway migrations once against the database in `DB_URL` and prints the
 applied versions and the tables. It reads `DB_URL`, `MYSQL_USER` and `MYSQL_PASSWORD` from the environment only (never
