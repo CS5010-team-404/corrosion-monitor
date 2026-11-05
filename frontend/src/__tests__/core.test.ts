@@ -2,6 +2,18 @@ import { describe, expect, it } from "vitest";
 import { fmt, label, marginTone } from "../lib/format";
 import { match } from "../lib/router";
 import { isPlatformPath } from "../lib/config";
+import { ApiError, errorMessage, NETWORK_ERROR_MESSAGE } from "../lib/api";
+
+describe("error messages", () => {
+  it("explains network failures, keeps server messages, and never returns an empty message", () => {
+    expect(errorMessage(new TypeError("Failed to fetch"))).toBe(NETWORK_ERROR_MESSAGE);
+    expect(NETWORK_ERROR_MESSAGE).toBe("Can't reach the server. Check your connection and try again.");
+    expect(errorMessage(new ApiError(401, "Incorrect email or password."))).toBe("Incorrect email or password.");
+    expect(errorMessage(new ApiError(500, ""), "fallback")).toBe("fallback");
+    expect(errorMessage("thrown string", "fallback")).toBe("fallback");
+    expect(errorMessage(undefined, "fallback")).toBe("fallback");
+  });
+});
 
 describe("format", () => {
   it("formats numbers and labels", () => {

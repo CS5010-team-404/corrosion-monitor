@@ -13,7 +13,20 @@ export class ApiError extends Error {
   }
 }
 
-type Handler = (path: string, init: RequestInit) => Promise<unknown>;
+export const NETWORK_ERROR_MESSAGE = "Can't reach the server. Check your connection and try again.";
+
+/**
+ * A readable message for anything a request can throw. fetch rejects with a TypeError when the server can't be
+ * reached (offline, DNS, CORS, server down), whose browser text ("Failed to fetch", "Load failed") means nothing to users.
+ */
+export function errorMessage(err: unknown, fallback = "Something went wrong. Please try again."): string {
+  if (err instanceof ApiError) return err.message || fallback;
+  if (err instanceof TypeError) return NETWORK_ERROR_MESSAGE;
+  if (err instanceof Error && err.message) return err.message;
+  return fallback;
+}
+
+type Handler =(path: string, init: RequestInit) => Promise<unknown>;
 let mockHandler: Handler | null = null;
 /** The mock backend registers itself here when VITE_USE_MOCKS=true. */
 export function setMockHandler(h: Handler) {

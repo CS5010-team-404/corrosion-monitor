@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { artMarkup } from "../components/Art";
 import { Icon } from "../components/Icon";
 import { Button } from "../components/ui";
+import { errorMessage } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { config } from "../lib/config";
 
@@ -18,7 +19,8 @@ export function Login() {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    try { await login(email, password); } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
+    // Every failure ends here with a message: API errors carry the server's text, network failures get a plain one.
+    try { await login(email, password); } catch (err) { setError(errorMessage(err, "Sign-in failed. Please try again.")); } finally { setBusy(false); }
   };
   return (
     <main className="login">
