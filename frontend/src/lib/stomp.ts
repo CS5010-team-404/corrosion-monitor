@@ -1,6 +1,12 @@
-// A ~70-line STOMP 1.2 client over WebSocket, enough for Spring's simple broker: CONNECT, SUBSCRIBE, MESSAGE,
+// A ~90-line STOMP 1.2 client over WebSocket, enough for Spring's simple broker: CONNECT, SUBSCRIBE, MESSAGE,
 // automatic reconnect. Avoids a dependency for something this small.
 type Listener = (body: unknown) => void;
+
+/** Reconnect delays: 3 s, doubling to 60 s; after 5 failed attempts in a row it gives up until the page is reloaded. */
+export const RETRY_FIRST_MS = 3000;
+export const RETRY_MAX_MS = 60000;
+export const MAX_FAILED_ATTEMPTS = 5;
+export const retryDelay = (failures: number) => Math.min(RETRY_MAX_MS, RETRY_FIRST_MS * 2 ** Math.max(0, failures - 1));
 
 export class StompClient {
   private ws: WebSocket | null = null;
@@ -8,6 +14,9 @@ export class StompClient {
   private connected = false;
   private nextId = 0;
   private stopped = false;
+  /** Connection attempts in a row that never reached CONNECTED. */
+  private failures = 0;
+  private timer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private url: string, private token?: () => string | null) {}
 
@@ -18,6 +27,7 @@ export class StompClient {
 
   stop() {
     this.stopped = true;
+    if (this.timer) clearTimeout(this.timer);
     this.ws?.close();
   }
 
@@ -42,6 +52,8 @@ export class StompClient {
     };
     this.ws.onmessage = (ev) => this.onData(String(ev.data));
     this.ws.onclose = () => {
+      // A connection that was up and then dropped starts a fresh series of attempts.
+      if (this.connected) this.failures = 0;
       this.connected = false;
       this.retry();
     };
@@ -49,7 +61,13 @@ export class StompClient {
   }
 
   private retry() {
-    if (!this.stopped) setTimeout(() => this.open(), 3000);
+    if (this.stopped) return;
+    this.failures++;
+    if (this.failures >= MAX_FAILED_ATTEMPTS) {
+      this.stopped = true; // pages keep polling; reload the page to try live updates again
+      return;
+    }
+    this.timer = setTimeout(() => this.open(), retryDelay(this.failures));
   }
 
   private onData(data: string) {
@@ -62,6 +80,7 @@ export class StompClient {
       const headers = Object.fromEntries(lines.slice(1).map((l) => [l.slice(0, l.indexOf(":")), l.slice(l.indexOf(":") + 1)]));
       if (command === "CONNECTED") {
         this.connected = true;
+        this.failures = 0;
         for (const topic of this.subs.keys()) this.sendSubscribe(topic);
       } else if (command === "MESSAGE") {
         let body: unknown = rest.join("\n\n");

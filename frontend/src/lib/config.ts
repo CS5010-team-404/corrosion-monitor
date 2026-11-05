@@ -18,6 +18,10 @@ export const config = {
   wsApi: apiBase ? `${toWs(apiBase)}/ws` : `${sameOrigin}/ws`,
   wsPlatform: platformBase ? `${toWs(platformBase)}/ws` : `${sameOrigin}/ws-platform`,
   useMocks: import.meta.env.VITE_USE_MOCKS === "true",
+  /** Connect to the team backend's WebSocket (/topic/risk, /topic/alerts). Off until the backend has /ws. */
+  backendLive: import.meta.env.VITE_BACKEND_LIVE === "true",
+  /** Demo only: endpoints that aren't built yet (404/501) are answered by the mock backend, marked as sample data. */
+  mockFallback: import.meta.env.VITE_MOCK_FALLBACK === "true",
 };
 
 /** Paths served by the data platform rather than the team backend. */
