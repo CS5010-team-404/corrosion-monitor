@@ -1,0 +1,16 @@
+# sudo cp corrosion-watch.service /etc/systemd/system/ && sudo systemctl enable --now corrosion-watch
+[Unit]
+Description=Corrosion Watch SHT31 sender
+After=network-online.target time-sync.target
+Wants=network-online.target
+
+[Service]
+User=pi
+WorkingDirectory=/home/pi/corrosion-watch
+EnvironmentFile=/home/pi/corrosion-watch/device.env
+ExecStart=/usr/bin/python3 /home/pi/corrosion-watch/sender.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

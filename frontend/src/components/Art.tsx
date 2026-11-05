@@ -1,0 +1,16 @@
+// Equipment illustrations used on location cards, the equipment scene and the sign-in page.
+/* eslint-disable */
+import type { ProfileKind } from "../api/types";
+const ART: Record<string, string> = {
+  rack: `<svg viewBox="0 0 220 160" aria-hidden="true"><ellipse cx="110" cy="150" rx="78" ry="6" fill="#1f5fe0" opacity=".10"/><rect x="62" y="12" width="96" height="136" rx="10" fill="#151a2b"/><rect x="70" y="20" width="80" height="120" rx="6" fill="#222a45"/>${[0, 1, 2, 3, 4, 5, 6].map((k) => `<rect x="76" y="${26 + k * 16}" width="68" height="11" rx="3" fill="#2d3760"/><circle cx="136" cy="${31.5 + k * 16}" r="2" fill="${k === 2 ? "#f4c06a" : "#57d6a2"}"/><rect x="82" y="${30 + k * 16}" width="30" height="3" rx="1.5" fill="#4a5a9a"/>`).join("")}<rect x="22" y="98" width="26" height="50" rx="8" fill="#dbe4f8"/><rect x="28" y="104" width="14" height="4" rx="2" fill="#1f5fe0"/></svg>`,
+  cabinet: `<svg viewBox="0 0 220 160" aria-hidden="true"><ellipse cx="110" cy="150" rx="84" ry="6" fill="#1f5fe0" opacity=".10"/><rect x="44" y="34" width="132" height="110" rx="12" fill="#ffffff" stroke="#dbe4f8" stroke-width="3"/><rect x="54" y="46" width="112" height="86" rx="7" fill="#151a2b"/>${[0, 1, 2].map((r) => [0, 1, 2, 3, 4, 5, 6, 7].map((c) => `<rect x="${62 + c * 12.5}" y="${56 + r * 22}" width="8" height="8" rx="2" fill="${(r + c) % 5 === 0 ? "#5d8cf5" : "#2d3760"}"/>`).join("")).join("")}<path d="M62 120 q40 -14 96 0" stroke="#57d6a2" stroke-width="3" fill="none"/></svg>`,
+  panel: `<svg viewBox="0 0 220 160" aria-hidden="true"><ellipse cx="110" cy="150" rx="78" ry="6" fill="#1f5fe0" opacity=".10"/><rect x="52" y="16" width="116" height="130" rx="12" fill="#1f5fe0"/><rect x="62" y="26" width="96" height="44" rx="6" fill="#151a2b"/><path d="M70 56 l12 -10 12 8 14 -14 12 10 18 -6" stroke="#57d6a2" stroke-width="3" fill="none" stroke-linecap="round"/>${[0, 1, 2].map((c) => `<circle cx="${80 + c * 30}" cy="96" r="11" fill="#dbe4f8"/><path d="M${80 + c * 30} 96 l6 -6" stroke="#151a2b" stroke-width="3" stroke-linecap="round"/>`).join("")}${[0, 1, 2, 3].map((c) => `<rect x="${70 + c * 22}" y="120" width="14" height="14" rx="4" fill="${c === 1 ? "#f4c06a" : "#edf2fe"}"/>`).join("")}</svg>`,
+  kiosk: `<svg viewBox="0 0 220 160" aria-hidden="true"><ellipse cx="110" cy="150" rx="70" ry="6" fill="#1f5fe0" opacity=".10"/><rect x="96" y="96" width="28" height="50" rx="6" fill="#dbe4f8"/><rect x="70" y="10" width="80" height="96" rx="12" fill="#151a2b"/><rect x="78" y="18" width="64" height="72" rx="6" fill="#1f5fe0"/><circle cx="110" cy="46" r="14" fill="#dbe4f8"/><path d="M110 37 s-7 8 -7 12 a7 7 0 0 0 14 0 c0 -4 -7 -12 -7 -12z" fill="#1f5fe0"/><rect x="88" y="68" width="44" height="6" rx="3" fill="#dbe4f8"/><rect x="96" y="78" width="28" height="4" rx="2" fill="#8fb0ff"/></svg>`,
+};
+const ART_OF: Record<ProfileKind, string> = { it: "rack", tel: "cabinet", plc: "panel", out: "kiosk" };
+
+export function Art({ kind, className }: { kind: ProfileKind | "rack" | "cabinet" | "panel" | "kiosk"; className?: string }) {
+  const key = (ART_OF as Record<string, string>)[kind] ?? kind;
+  return <span className={className} style={{ display: "contents" }} dangerouslySetInnerHTML={{ __html: ART[key] }} />;
+}
+export const artMarkup = (key: string) => ART[key].replace(/<\/?svg[^>]*>/g, "");

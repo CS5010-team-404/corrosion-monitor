@@ -1,0 +1,103 @@
+# Render Blueprint for Corrosion Watch. Must be at the ROOT of the repository.
+#
+#   corrosion-watch-api       team backend (Docker): auth, analytics, alerts, audit, reports, admin
+#   corrosion-watch-platform  data platform (Docker): device ingestion, sensor health, simulator, forecast
+#   corrosion-watch-web       React frontend (static site, free, on Render's CDN)
+#
+# All three share one MySQL database (Aiven free tier) and one JWT secret, so a single sign-in works everywhere.
+# The backend creates the schema with Flyway on startup; the platform adds its own tables. See docs/DEPLOYMENT.md.
+# Cost: two Starter web services ($7/month each) from the $100 credit; the static site is free.
+
+envVarGroups:
+  - name: corrosion-watch-shared
+    envVars:
+      - key: ECP_JWT_SECRET          # HS256 signing key; the backend signs tokens, the platform validates them
+        generateValue: true
+
+services:
+  # ---------------------------------------------------------------- team backend
+  # Env var names are the ones backend/src/main/resources/application.properties reads.
+  - type: web
+    name: corrosion-watch-api
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .                 # repository root: the backend inherits the root pom
+    healthCheckPath: /actuator/health
+    buildFilter:
+      ignoredPaths: ["frontend/**", "platform/**", "docs/**", "devices/**", "scripts/**"]
+    envVars:
+      - fromGroup: corrosion-watch-shared   # ECP_JWT_SECRET: signs tokens; the platform validates them
+      - key: DB_URL                  # jdbc:mysql://HOST:PORT/defaultdb?sslMode=REQUIRED&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
+        sync: false
+      - key: MYSQL_USER
+        sync: false
+      - key: MYSQL_PASSWORD
+        sync: false
+      - key: DB_POOL                 # Aiven free tier allows few connections; keep pools small
+        value: "5"
+      - key: ECP_DEMO_PASSWORD       # password for the four demo users created on an empty app_user
+        sync: false
+      - key: FRONTEND_HOST           # enter the web site's public host, e.g. corrosion-watch-web.onrender.com (for CORS)
+        sync: false                  # fromService "host" gives the internal name, which browsers can't use
+
+  # ---------------------------------------------------------------- data platform
+  - type: web
+    name: corrosion-watch-platform
+    runtime: docker
+    plan: starter                    # never sleeps: the simulator and health checks run continuously
+    dockerfilePath: ./deploy/platform.Dockerfile
+    dockerContext: .
+    healthCheckPath: /actuator/health
+    buildFilter:
+      paths: ["platform/**", "deploy/platform.Dockerfile"]
+    envVars:
+      - fromGroup: corrosion-watch-shared
+      - key: ECP_DB_URL
+        sync: false
+      - key: ECP_DB_USER
+        sync: false
+      - key: ECP_DB_PASSWORD
+        sync: false
+      - key: ECP_DB_POOL
+        value: "4"
+      - key: ECP_SECRET_KEY          # encrypts device HMAC keys at rest
+        generateValue: true
+      - key: ECP_SECRET_SALT         # hex, for example from: openssl rand -hex 8
+        sync: false
+      - key: ECP_JWT_ROLES_CLAIM     # claim in the backend's JWT that lists roles
+        value: roles
+      - key: ECP_SIMULATOR_ENABLED
+        value: "true"
+      - key: FRONTEND_HOST           # enter the web site's public host, e.g. corrosion-watch-web.onrender.com (for CORS)
+        sync: false                  # fromService "host" gives the internal name, which browsers can't use
+
+  # ---------------------------------------------------------------- frontend
+  - type: web
+    name: corrosion-watch-web
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install --no-audit --no-fund && npm run build    # use "npm ci" once package-lock.json is committed
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+    envVars:
+      # fromService "host" gives the internal service name, which browsers can't resolve: enter the public URLs.
+      - key: VITE_API_URL            # e.g. https://corrosion-watch-api.onrender.com
+        sync: false
+      - key: VITE_PLATFORM_URL       # e.g. https://corrosion-watch-platform.onrender.com
+        sync: false
+      - key: NODE_VERSION
+        value: "22"
