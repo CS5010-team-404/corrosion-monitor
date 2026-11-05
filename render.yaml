@@ -38,8 +38,8 @@ services:
         value: "5"
       - key: ECP_DEMO_PASSWORD       # password for the four demo users created on an empty app_user
         sync: false
-      - key: FRONTEND_HOST
-        fromService: { type: web, name: corrosion-watch-web, property: host }
+      - key: FRONTEND_HOST           # enter the web site's public host, e.g. corrosion-watch-web.onrender.com (for CORS)
+        sync: false                  # fromService "host" gives the internal name, which browsers can't use
 
   # ---------------------------------------------------------------- data platform
   - type: web
@@ -69,8 +69,8 @@ services:
         value: roles
       - key: ECP_SIMULATOR_ENABLED
         value: "true"
-      - key: FRONTEND_HOST
-        fromService: { type: web, name: corrosion-watch-web, property: host }
+      - key: FRONTEND_HOST           # enter the web site's public host, e.g. corrosion-watch-web.onrender.com (for CORS)
+        sync: false                  # fromService "host" gives the internal name, which browsers can't use
 
   # ---------------------------------------------------------------- frontend
   - type: web
@@ -94,9 +94,10 @@ services:
         name: Referrer-Policy
         value: strict-origin-when-cross-origin
     envVars:
-      - key: VITE_API_URL
-        fromService: { type: web, name: corrosion-watch-api, property: host }
-      - key: VITE_PLATFORM_URL
-        fromService: { type: web, name: corrosion-watch-platform, property: host }
+      # fromService "host" gives the internal service name, which browsers can't resolve: enter the public URLs.
+      - key: VITE_API_URL            # e.g. https://corrosion-watch-api.onrender.com
+        sync: false
+      - key: VITE_PLATFORM_URL       # e.g. https://corrosion-watch-platform.onrender.com
+        sync: false
       - key: NODE_VERSION
         value: "22"

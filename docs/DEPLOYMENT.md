@@ -45,6 +45,20 @@ Render → New → Blueprint → choose the repository. Render reads `render.yam
 variable: backend `DB_URL`, `MYSQL_USER`, `MYSQL_PASSWORD`, `ECP_DEMO_PASSWORD`; platform `ECP_DB_URL`, `ECP_DB_USER`,
 `ECP_DB_PASSWORD`, `ECP_SECRET_SALT`. First builds take a few minutes.
 
+**Service addresses are entered by hand.** `fromService ... property: host` gives Render's internal service name
+(for example `corrosion-watch-api`), which browsers can't resolve, so these four values are `sync: false`. Enter the
+public addresses shown at the top of each service's page in the Render dashboard, with no trailing slash:
+
+| Service | Variable | Value |
+|---|---|---|
+| corrosion-watch-web | `VITE_API_URL` | `https://corrosion-watch-api.onrender.com` |
+| corrosion-watch-web | `VITE_PLATFORM_URL` | `https://corrosion-watch-platform.onrender.com` |
+| corrosion-watch-api | `FRONTEND_HOST` | `corrosion-watch-web.onrender.com` (host only; `https://` is added) |
+| corrosion-watch-platform | `FRONTEND_HOST` | `corrosion-watch-web.onrender.com` |
+
+The `VITE_*` values are built into the static site, so after changing them run Manual Deploy → "Clear build cache &
+deploy" on corrosion-watch-web. A wrong `FRONTEND_HOST` shows up in the browser as a CORS error on sign-in.
+
 ## 4. Check the database migrations (optional, before or after the first deploy)
 `scripts/check-aiven.sh` runs the backend's Flyway migrations once against the database in `DB_URL` and prints the
 applied versions and the tables. It reads `DB_URL`, `MYSQL_USER` and `MYSQL_PASSWORD` from the environment only (never
