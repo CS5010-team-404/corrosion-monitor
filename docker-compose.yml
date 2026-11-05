@@ -3,7 +3,7 @@
 # platform share this one database. Values come from .env (copy .env.example); the fallbacks match .env.example.
 services:
   db:
-    image: mysql:8.0
+    image: mysql:8.4   # Aiven runs MySQL 8.4 (docs/DEPLOYMENT.md)
     container_name: corrosion-db
     # Same settings as production (Aiven, checked by hand; docs/DEPLOYMENT.md), so SQL that works here works there.
     # log_bin_trust_function_creators lets the app account create the audit_log triggers (V1).

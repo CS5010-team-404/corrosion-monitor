@@ -57,7 +57,9 @@ Owners: Aayushee (analytics), Dumebi (alerts), Anela (audit), Joshua (platform/f
 - Dropped `sensor`, `reading`, `used_nonce`; the platform's `sensors`/`readings` (timestamp + HMAC ingestion) are the only copies. This also closes the `sensor.health` vs `sensor_health.status` mismatch. 7a32f4b
 - Flyway: the team schema runs from `backend/src/main/resources/db/migration` (V1 = old `db/schema.sql` without `CREATE DATABASE`/`USE`/`DELIMITER`). c439a1b
 - Database name `corrosion_monitor` for the platform too. 577973f
-- One shared MySQL 8.0 for backend and platform locally (`docker-compose.platform.yml` includes `docker-compose.yml`). 73a72ab
+- One shared MySQL for backend and platform locally (`docker-compose.platform.yml` includes `docker-compose.yml`). 73a72ab
 - `/api/v1` prefix on every platform and frontend path. daa4e41
 - Java 17 / Spring Boot 3.4.1 for the platform (decision 7). 75875d8
 - Aiven `log_bin_trust_function_creators` is already ON (checked by hand: a test trigger was created), so V1's `audit_log` triggers run there. Production `sql_mode` and `sql_require_primary_key=ON` are recorded in DEPLOYMENT.md and applied locally and in backend tests; all migrations, backend tests and every platform endpoint pass under them (no SQL changes were needed).
+- Aiven production check: `scripts/check-aiven.sh` applied V1-V3 on Aiven (MySQL 8.4) on 2026-11-04. Local MySQL and the
+  backend tests now use `mysql:8.4` to match; the Flyway "upgrade recommended" warning for 8.4 is expected (DEPLOYMENT.md).

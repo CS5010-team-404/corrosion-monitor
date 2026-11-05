@@ -10,6 +10,12 @@ jdbc:mysql://HOST:PORT/defaultdb?sslMode=REQUIRED&connectionTimeZone=UTC&forceCo
 ```
 The free tier allows few connections: keep the pools at 4-5 per service (`DB_POOL` backend, `ECP_DB_POOL` platform).
 
+**Version: Aiven runs MySQL 8.4.** Local MySQL (`docker-compose.yml`) and the backend tests (`AivenMySql`) use
+`mysql:8.4` to match. The migrations were verified there on 2026-11-04: `scripts/check-aiven.sh` applied V1-V3.
+Flyway 10.20 logs "Flyway upgrade recommended: MySQL 8.4 is newer than this version of Flyway ... latest supported
+version of MySQL is 8.1". That warning is expected and harmless: the migrations, the backend tests and the platform all
+run on 8.4.
+
 **Production settings (checked by hand on our Aiven service).** Local MySQL (`docker-compose.yml`) and every backend
 Testcontainers MySQL (`backend/src/test/.../AivenMySql.java`) run with the same values, so SQL that passes locally passes
 in production:
