@@ -1,0 +1,17 @@
+name: frontend
+on:
+  push: { branches: [main], paths: ["frontend/**", ".github/workflows/frontend.yml"] }
+  pull_request: { paths: ["frontend/**", ".github/workflows/frontend.yml"] }
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: frontend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: npm install --no-audit --no-fund
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - run: npm run build:mock    # the mock build must keep working: it is the team's demo fallback

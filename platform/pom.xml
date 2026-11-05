@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <!-- Data platform for Corrosion Watch (owner: Joshua): device ingestion, simulator, sensor health, forecaster.
+       Either add these modules to the team backend's build, or run ecp-platform-app as its own service.
+       See ../docs/ARCHITECTURE.md, "Two ways to run the platform". -->
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>3.4.1</version>
+    <relativePath/>
+  </parent>
+  <groupId>edu.neu.ecp</groupId>
+  <artifactId>ecp-platform-parent</artifactId>
+  <version>0.2.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+
+  <properties>
+    <java.version>17</java.version>
+    <jacoco.version>0.8.12</jacoco.version>
+  </properties>
+
+  <modules>
+    <module>ecp-common</module>
+    <module>ecp-simulator</module>
+    <module>ecp-forecast</module>
+    <module>ecp-ingestion</module>
+    <module>ecp-health</module>
+    <module>ecp-platform-app</module>
+  </modules>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency><groupId>edu.neu.ecp</groupId><artifactId>ecp-common</artifactId><version>${project.version}</version></dependency>
+      <dependency><groupId>edu.neu.ecp</groupId><artifactId>ecp-simulator</artifactId><version>${project.version}</version></dependency>
+      <dependency><groupId>edu.neu.ecp</groupId><artifactId>ecp-forecast</artifactId><version>${project.version}</version></dependency>
+      <dependency><groupId>edu.neu.ecp</groupId><artifactId>ecp-ingestion</artifactId><version>${project.version}</version></dependency>
+      <dependency><groupId>edu.neu.ecp</groupId><artifactId>ecp-health</artifactId><version>${project.version}</version></dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <version>${jacoco.version}</version>
+        <executions>
+          <execution><id>prepare-agent</id><goals><goal>prepare-agent</goal></goals></execution>
+          <execution><id>report</id><phase>verify</phase><goals><goal>report</goal></goals></execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>
