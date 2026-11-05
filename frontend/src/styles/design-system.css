@@ -395,6 +395,38 @@ table.dt .r { text-align: right; }
 .err { color: var(--crit); font-size: 13.5px; margin: 0; display: flex; gap: 8px; align-items: center; }
 
 /* ---------------------------------------------------------------- responsive */
+/* ---------------------------------------------------------------- large screens
+   Everything here is inside min-width queries, so phone, tablet and laptop layouts (< 1280 px) are unchanged.
+   The content column grows to 1920 px and is centred beyond that; the top bar's padding puts its contents on the
+   same left and right edges as the content at every width. */
+@media (min-width: 1280px) {
+  :root { --content-max: 1920px; --gutter: clamp(40px, 3vw, 72px); }
+  .content { width: 100%; max-width: var(--content-max); margin-inline: auto; padding-inline: var(--gutter); }
+  .topbar { padding-inline: calc(max(0px, (100% - var(--content-max)) / 2) + var(--gutter)); }
+  .search { max-width: clamp(420px, 24vw, 560px); }
+  .tiles { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+  .locs { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+  h1 { font-size: clamp(26px, 0.9vw + 14px, 34px); }
+  .night .big { font-size: clamp(64px, 2.6vw + 30px, 84px); }
+  .mini .v { font-size: clamp(26px, 0.6vw + 18px, 32px); }
+  .content p, .callout > div { max-width: 80ch; }   /* readable line length however wide the column gets */
+  .drawer { width: min(clamp(460px, 28vw, 560px), 100%); }
+}
+@media (min-width: 1600px) {
+  body { font-size: 15px; }
+  .section { margin-top: 52px; }
+  .page-head { margin-bottom: 34px; }
+  .grid-hero, .cols { gap: 24px; }
+  .tiles { gap: 18px; } .locs { gap: 20px; }
+}
+@media (min-width: 2200px) {
+  body { font-size: 16px; }
+  .content { padding-top: 44px; }
+  .section { margin-top: 60px; }
+  .page-head { margin-bottom: 38px; }
+  .grid-hero, .cols { gap: 28px; }
+  .tiles { gap: 20px; } .locs { gap: 22px; }
+}
 @media (max-width: 1180px) {
   .shell { grid-template-columns: 84px minmax(0, 1fr); }
   .side { padding: 20px 12px; align-items: center; }
