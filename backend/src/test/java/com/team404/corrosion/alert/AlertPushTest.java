@@ -70,6 +70,9 @@ class AlertPushTest {
         });
         Thread.sleep(500); // let the subscription reach the broker
 
+        // A client cannot broadcast on the topic itself: this spoof must never arrive.
+        session.send("/topic/alerts", Map.of("alertId", -1, "action", "SPOOFED"));
+        Thread.sleep(500);
         service.acknowledge(id, "tara@test.local");
 
         Map<String, Object> notice = received.poll(10, TimeUnit.SECONDS);
@@ -77,5 +80,6 @@ class AlertPushTest {
         assertThat(notice).isNotNull();
         assertThat(((Number) notice.get("alertId")).longValue()).isEqualTo(id);
         assertThat(notice.get("action")).isEqualTo("ALERT_ACKNOWLEDGED");
+        assertThat(received).isEmpty();
     }
 }
