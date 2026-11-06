@@ -14,13 +14,13 @@ Details: [docs/](docs/) | [Project proposal (Google Doc)](https://docs.google.co
 
 ## Repository layout
 
-| Folder | Contents |
-|---|---|
-| `backend/` | Spring Boot application (API, analytics, alerts, audit, security) |
-| `simulator/` | Java sensor simulator and scenario files |
-| `db/` | MySQL schema and seed data |
-| `docs/` | API contract, design notes, NIST mapping, evaluation results |
-| `.github/` | CI workflow, PR and issue templates |
+| Folder       | Contents                                                          |
+|--------------|-------------------------------------------------------------------|
+| `backend/`   | Spring Boot application (API, analytics, alerts, audit, security) |
+| `simulator/` | Java sensor simulator and scenario files                          |
+| `db/`        | MySQL schema and seed data                                        |
+| `docs/`      | API contract, design notes, NIST mapping, evaluation results      |
+| `.github/`   | CI workflow, PR and issue templates                               |
 
 ## Quick start
 
@@ -62,12 +62,12 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow.
 
 ## Team
 
-| Member | Role | GitHub |
-|---|---|---|
-| Aayushee Bhat | TBD | @aayushee-bhat |
-| Anela Quiroz | TBD | @anelajoy |
-| Dumebi Onyebuchi | TBD | @dumebi2003 |
-| Joshua Dominick | TBD | @Joshuadommy |
+| Member           | Role | GitHub         |
+|------------------|------|----------------|
+| Aayushee Bhat    | TBD  | @aayushee-bhat |
+| Anela Quiroz     | TBD  | @anelajoy      |
+| Dumebi Onyebuchi | TBD  | @dumebi2003    |
+| Joshua Dominick  | TBD  | @Joshuadommy   |
 
 ## NIST alignment
 
