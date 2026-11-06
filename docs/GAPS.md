@@ -10,7 +10,7 @@ Owners: Aayushee (analytics), Dumebi (alerts), Anela (audit), Joshua (platform/f
 ### Team (users and configuration)
 - Missing: `GET /api/v1/admin/users` (`User`: username, fullName, enabled, lockedUntil, lastLoginAt; there are no `enabled`/`last_login_at` columns). Owner: team
 - Missing: `GET /api/v1/profiles`. `equipment_profile` has no `tempMinC`/`tempMaxC`/`surfaceOffsetC` and names its columns `rh_warn_pct`/`dew_margin_warn_c`. Owner: team
-- Missing: STOMP `/ws` with `/topic/risk` and `/topic/alerts` (optional, because the UI polls). Owner: team
+- Missing: `/topic/risk` messages (`/ws` now exists, see Done; analytics publishes through `SimpMessagingTemplate`). Owner: Aayushee
 - Mismatch: `docs/1-api-contract.md` still mentions an Auditor role; decision 4 has four roles (TECHNICIAN, OPERATOR, MANAGER, ADMIN). Owner: team
 
 ### Aayushee: analytics
@@ -23,12 +23,7 @@ Owners: Aayushee (analytics), Dumebi (alerts), Anela (audit), Joshua (platform/f
 - Missing: `GET /api/v1/reports/summary` and `.csv` / `.pdf` (no OpenPDF dependency). Owner: Aayushee with Dumebi
 
 ### Dumebi: alerts
-- Missing: `GET /api/v1/alerts?status=&limit=` and `GET /api/v1/alerts/{id}` → `{alert, actions}`. Owner: Dumebi
-- Missing: `POST /api/v1/alerts/{id}/acknowledge`, `/resolve {notes}`, `/actions {actionType, notes}`. Owner: Dumebi
-- Mismatch: `alert.status` uses CLOSED, while the UI uses RESOLVED. The v1 contract uses `/ack`, the UI uses `/acknowledge`. Owner: Dumebi
-- Mismatch: `alert` lacks source, title, escalation level, sensor id, resolved_at/by and condition_cleared_at, and it is keyed by `location_id`, not equipment. Owner: Dumebi
-- Mismatch: `corrective_action` has `action_text`, while the UI sends `actionType` + `notes`. Owner: Dumebi
-- Missing: consumer of `alert_signals` (in id order, sets `processed_at`, dedup by `dedup_key`). Owner: Dumebi
+- Mismatch: `docs/1-api-contract.md` still lists `/alerts/{id}/ack` and Operator as the acting role; the code follows the UI and CONTRACTS.md (`/acknowledge`, TECHNICIAN and ADMIN). Owner: Dumebi
 
 ### Anela: audit
 - Missing: `GET /api/v1/audit?size=&page=&actor=&action=` → `AuditEntry[]`. Owner: Anela
@@ -44,6 +39,11 @@ Owners: Aayushee (analytics), Dumebi (alerts), Anela (audit), Joshua (platform/f
 - `alert` + `alert_signals` and `audit_log` + `audit_outbox` have different roles (state vs inbox); keep both.
 
 ## Done
+- Alert audit and live updates: every alert state change (opened, acknowledged, resolved by a user or by the quiet period, escalated, corrective action logged) writes `audit_outbox` in the same transaction (`ALERT_OPENED`, `ALERT_ACKNOWLEDGED`, `ALERT_RESOLVED`, `ALERT_ESCALATED`, `CORRECTIVE_ACTION_LOGGED`; entity `alert`), and after commit a notice `{alertId, action}` goes to `/topic/alerts`. Severity refreshes and CLEARED signals push `ALERT_UPDATED` but write no audit event, because they are not state changes.
+- Backend STOMP at `/ws` (simple broker `/topic`, origins from `ecp.ws.allowed-origin-patterns`). The handshake is open, so topics carry change notices only. Approved for the alerts work; the shared edits were `backend/pom.xml` and `SecurityConfig`.
+- Alert endpoints: `GET /api/v1/alerts?status=ALL|ACTIVE|OPEN|ACKNOWLEDGED|RESOLVED&limit=`, `GET /api/v1/alerts/{id}` → `{alert, actions}`, `POST …/acknowledge`, `…/resolve {notes}`, `…/actions {actionType, notes}`. OPEN → ACKNOWLEDGED → RESOLVED (an OPEN alert may be resolved directly), wrong-state requests get 409, TECHNICIAN and ADMIN act, everyone signed in reads. `corrective_action` has `action_type` and `notes` (V6).
+- Escalation: an OPEN CRITICAL alert not acknowledged within 5 minutes (`ecp.alerts.escalate-after`) gets `escalation_level` 1 once and the managers are emailed (best effort; MailHog locally).
+- Alerts: `alert` has equipment, sensor, source, title, dedup key, escalation level, resolved_at/by and condition_cleared_at, and RESOLVED replaces CLOSED (V5); `device_id` and `critical_since` (escalation counts from it) in V7. The consumer (`alert/signal`) reads `alert_signals` in id order and sets `processed_at`: RAISED opens or updates one alert per dedup key, CLEARED records `condition_cleared_at`, and an alert auto-resolves after a quiet period (`ecp.alerts.quiet-period`, default 10 minutes).
 - Login: `POST /api/v1/auth/login {email, password}` → `{token, expiresAt, email, fullName, role}` and `GET /api/v1/auth/me`, on `app_user` (BCrypt, same message for unknown email and wrong password). a4c64b0, 07c7480
 - Lockout: 5 consecutive failures lock for 15 minutes (`failed_logins`, `locked_until`), refused even with the right password, success resets; times stored in UTC. a4c64b0, 2035586
 - JWT: HS256 with `ECP_JWT_SECRET` (startup fails if missing or < 32 bytes), `sub` = email, `roles` = [role], `name`, 8 hours; validated exactly like the platform. 07c7480

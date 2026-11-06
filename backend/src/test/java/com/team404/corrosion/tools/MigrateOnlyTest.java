@@ -27,7 +27,8 @@ class MigrateOnlyTest {
     @Test
     void migratesOnceThenReportsVersionsAndTablesWithoutThePassword() throws Exception {
         String first = run();
-        assertThat(first).contains("Migrations run now: 3", "team schema", "agreed changes", "demo reference data",
+        assertThat(first).contains("Migrations run now: 7", "team schema", "agreed changes", "demo reference data", "audit chain",
+                "alert lifecycle columns", "corrective action type", "alert device and critical since",
                 "app_user", "equipment", "audit_outbox", "flyway_schema_history");
         assertThat(first).doesNotContain(MYSQL.getPassword() + "\n");
 
