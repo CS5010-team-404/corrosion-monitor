@@ -38,11 +38,12 @@ public class JdbcAlertStore implements AlertStore {
         jdbc.update(con -> {
             var ps = con.prepareStatement("""
                 INSERT INTO alert (location_id, equipment_id, sensor_id, device_id, source, type, severity, title, message,
-                                   dedup_key, status, opened_at)
-                VALUES ((SELECT location_id FROM equipment WHERE id = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?)
+                                   dedup_key, status, opened_at, critical_since)
+                VALUES ((SELECT location_id FROM equipment WHERE id = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?)
                 """, Statement.RETURN_GENERATED_KEYS);
             Object[] args = {s.equipmentId(), s.equipmentId(), s.sensorId(), s.deviceId(), s.source(), s.type(),
-                    severity(s), title(s), message(s), s.dedupKey(), Timestamp.from(openedAt)};
+                    severity(s), title(s), message(s), s.dedupKey(), Timestamp.from(openedAt),
+                    isCritical(s) ? Timestamp.from(openedAt) : null};
             for (int i = 0; i < args.length; i++) {
                 ps.setObject(i + 1, args[i]);
             }
@@ -52,11 +53,14 @@ public class JdbcAlertStore implements AlertStore {
     }
 
     @Override
-    public void refresh(long alertId, Signal s) {
+    public void refresh(long alertId, Signal s, Instant at) {
+        // critical_since is set before severity changes, so it still sees the old severity.
         jdbc.update("""
-                UPDATE alert SET severity = ?, title = ?, message = ?, sensor_id = ?, condition_cleared_at = NULL
+                UPDATE alert SET
+                    critical_since = CASE WHEN ? THEN (CASE WHEN severity = 'CRITICAL' THEN COALESCE(critical_since, opened_at) ELSE ? END) END,
+                    severity = ?, title = ?, message = ?, sensor_id = ?, condition_cleared_at = NULL
                 WHERE id = ?
-                """, severity(s), title(s), message(s), s.sensorId(), alertId);
+                """, isCritical(s), Timestamp.from(at), severity(s), title(s), message(s), s.sensorId(), alertId);
     }
 
     @Override
@@ -79,7 +83,11 @@ public class JdbcAlertStore implements AlertStore {
 
     /** alert.severity allows WARNING and CRITICAL only; an INFO signal is shown as a warning. */
     private static String severity(Signal s) {
-        return "CRITICAL".equals(s.severity()) ? "CRITICAL" : "WARNING";
+        return isCritical(s) ? "CRITICAL" : "WARNING";
+    }
+
+    private static boolean isCritical(Signal s) {
+        return "CRITICAL".equals(s.severity());
     }
 
     private static String title(Signal s) {
