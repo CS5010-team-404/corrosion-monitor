@@ -217,7 +217,7 @@ class SignalProcessorTest {
         }
 
         @Override
-        public void refresh(long id, Signal s) {
+        public void refresh(long id, Signal s, Instant at) {
             FakeAlert a = alerts.get((int) id);
             a.severity = s.severity();
             a.conditionClearedAt = null;

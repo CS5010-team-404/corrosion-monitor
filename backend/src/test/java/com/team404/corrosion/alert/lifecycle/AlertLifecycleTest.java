@@ -12,6 +12,8 @@ import com.team404.corrosion.AivenMySql;
 import com.team404.corrosion.alert.AlertBroadcaster;
 import com.team404.corrosion.alert.AlertEvents;
 import com.team404.corrosion.alert.lifecycle.AlertViews.AlertView;
+import com.team404.corrosion.alert.signal.JdbcAlertStore;
+import com.team404.corrosion.alert.signal.Signal;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
@@ -254,6 +256,37 @@ class AlertLifecycleTest {
                 Duration.ofMinutes(5));
         assertThat(later.escalateDue()).isEqualTo(1);
         assertThat(sent).containsExactly(stale, fresh);
+    }
+
+    @Test
+    void aWarningThatTurnsCriticalGetsTheFullFiveMinutesFromThen() {
+        Instant now = Instant.parse("2026-11-06T12:00:00Z");
+        long id = alert("WARNING", "OPEN", now.minus(Duration.ofMinutes(30)));
+        new JdbcAlertStore(jdbc).refresh(id, critical(), now.minus(Duration.ofMinutes(2)));
+        var sent = new ArrayList<Long>();
+
+        assertThat(new EscalationJob(repository, (a, e) -> sent.add(a.id()), events, tx, fixed(now),
+                Duration.ofMinutes(5)).escalateDue()).isZero();
+        assertThat(new EscalationJob(repository, (a, e) -> sent.add(a.id()), events, tx,
+                fixed(now.plus(Duration.ofMinutes(3))), Duration.ofMinutes(5)).escalateDue()).isEqualTo(1);
+        assertThat(sent).containsExactly(id);
+    }
+
+    @Test
+    void aRepeatedCriticalSignalDoesNotRestartTheEscalationClock() {
+        Instant now = Instant.parse("2026-11-06T12:00:00Z");
+        long id = alert("WARNING", "OPEN", now.minus(Duration.ofMinutes(30)));
+        var store = new JdbcAlertStore(jdbc);
+        store.refresh(id, critical(), now.minus(Duration.ofMinutes(6)));
+        store.refresh(id, critical(), now.minus(Duration.ofMinutes(1)));
+
+        assertThat(new EscalationJob(repository, (a, e) -> { }, events, tx, fixed(now), Duration.ofMinutes(5))
+                .escalateDue()).isEqualTo(1);
+    }
+
+    private static Signal critical() {
+        return new Signal(1, "ANALYTICS", "CONDENSATION_RISK", "CRITICAL", Signal.RAISED, null, null, null, "k",
+                "Test alert", "Margin is low", Instant.now());
     }
 
     @Test

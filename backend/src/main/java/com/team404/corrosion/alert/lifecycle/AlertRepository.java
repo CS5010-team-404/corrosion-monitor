@@ -32,6 +32,11 @@ public class AlertRepository {
             LEFT JOIN app_user res ON res.id = a.resolved_by
             """;
 
+    private static final String CAN_ACKNOWLEDGE = AlertStatus.sqlIn(AlertStatus::canAcknowledge);
+    private static final String CAN_RESOLVE = AlertStatus.sqlIn(AlertStatus::canResolve);
+    private static final String CAN_LOG_ACTION = AlertStatus.sqlIn(AlertStatus::canLogAction);
+    private static final String CAN_ESCALATE = AlertStatus.sqlIn(AlertStatus::canEscalate);
+
     private final JdbcTemplate jdbc;
 
     public AlertRepository(JdbcTemplate jdbc) {
@@ -71,16 +76,16 @@ public class AlertRepository {
     public boolean acknowledge(long id, long userId, Instant at) {
         return jdbc.update("""
                 UPDATE alert SET status = 'ACKNOWLEDGED', acknowledged_by = ?, acknowledged_at = ?
-                WHERE id = ? AND status = 'OPEN'
-                """, userId, Timestamp.from(at), id) == 1;
+                WHERE id = ? AND status IN %s
+                """.formatted(CAN_ACKNOWLEDGE), userId, Timestamp.from(at), id) == 1;
     }
 
     /** True if the alert was not yet RESOLVED and now is. */
     public boolean resolve(long id, long userId, Instant at) {
         return jdbc.update("""
                 UPDATE alert SET status = 'RESOLVED', resolved_by = ?, resolved_at = ?
-                WHERE id = ? AND status <> 'RESOLVED'
-                """, userId, Timestamp.from(at), id) == 1;
+                WHERE id = ? AND status IN %s
+                """.formatted(CAN_RESOLVE), userId, Timestamp.from(at), id) == 1;
     }
 
     /** Inserts only while the alert is not RESOLVED. Returns the new id, or empty if the alert was resolved or is gone. */
@@ -89,8 +94,8 @@ public class AlertRepository {
         int rows = jdbc.update(con -> {
             var ps = con.prepareStatement("""
                     INSERT INTO corrective_action (alert_id, user_id, action_type, notes, created_at)
-                    SELECT id, ?, ?, ?, ? FROM alert WHERE id = ? AND status <> 'RESOLVED'
-                    """, java.sql.Statement.RETURN_GENERATED_KEYS);
+                    SELECT id, ?, ?, ?, ? FROM alert WHERE id = ? AND status IN %s
+                    """.formatted(CAN_LOG_ACTION), java.sql.Statement.RETURN_GENERATED_KEYS);
             ps.setLong(1, userId);
             ps.setString(2, actionType);
             ps.setString(3, notes);
@@ -109,21 +114,22 @@ public class AlertRepository {
                 rs.getString("name"), instant(rs, "created_at")), id).stream().findFirst();
     }
 
-    /** OPEN CRITICAL alerts not yet escalated that were opened at or before the cutoff. */
+    /** OPEN CRITICAL alerts not yet escalated that have been CRITICAL since the cutoff or earlier. */
     public List<Long> escalationCandidates(Instant openedBefore) {
         return jdbc.queryForList("""
                 SELECT id FROM alert
-                WHERE status = 'OPEN' AND severity = 'CRITICAL' AND escalation_level = 0 AND opened_at <= ?
+                WHERE status IN %s AND severity = 'CRITICAL' AND escalation_level = 0
+                  AND COALESCE(critical_since, opened_at) <= ?
                 ORDER BY id
-                """, Long.class, Timestamp.from(openedBefore));
+                """.formatted(CAN_ESCALATE), Long.class, Timestamp.from(openedBefore));
     }
 
     /** True if this call escalated it (it was still OPEN and at level 0). */
     public boolean escalate(long id, Instant at) {
         return jdbc.update("""
                 UPDATE alert SET escalation_level = 1, escalated_at = ?
-                WHERE id = ? AND status = 'OPEN' AND escalation_level = 0
-                """, Timestamp.from(at), id) == 1;
+                WHERE id = ? AND status IN %s AND severity = 'CRITICAL' AND escalation_level = 0
+                """.formatted(CAN_ESCALATE), Timestamp.from(at), id) == 1;
     }
 
     public List<String> managerEmails() {

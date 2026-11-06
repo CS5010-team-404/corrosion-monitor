@@ -13,8 +13,11 @@ public interface AlertStore {
     /** Returns the new alert's id. */
     long open(Signal signal, Instant openedAt);
 
-    /** Takes the signal's latest severity, text and sensor, and drops conditionClearedAt (the condition is back). */
-    void refresh(long alertId, Signal signal);
+    /**
+     * Takes the signal's latest severity, text and sensor, and drops conditionClearedAt (the condition is back).
+     * An alert that becomes CRITICAL at {@code at} starts its escalation clock then.
+     */
+    void refresh(long alertId, Signal signal, Instant at);
 
     void markConditionCleared(long alertId, Instant clearedAt);
 

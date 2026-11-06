@@ -39,7 +39,7 @@ public class SignalProcessor {
         switch (signal.state()) {
             case Signal.RAISED -> unresolved.ifPresentOrElse(
                     a -> {
-                        store.refresh(a.id(), signal);
+                        store.refresh(a.id(), signal, clock.instant());
                         events.updated(a.id());
                     },
                     () -> {
