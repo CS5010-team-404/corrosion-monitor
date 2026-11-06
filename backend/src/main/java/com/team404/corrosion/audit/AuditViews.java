@@ -37,4 +37,9 @@ public final class AuditViews {
     public static boolean isAdmin(List<String> roles) {
         return roles != null && roles.contains(ADMIN_ROLE);
     }
+
+    /** True when the roles claim contains exactly MANAGER or ADMIN: may read the audit list (docs/CONTRACTS.md). */
+    public static boolean canViewLog(List<String> roles) {
+        return roles != null && (roles.contains(ADMIN_ROLE) || roles.contains("MANAGER"));
+    }
 }
