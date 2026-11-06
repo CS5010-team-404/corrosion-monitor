@@ -31,7 +31,9 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 /** A browser-like STOMP client on /ws (no token) receives the notice when an alert changes. */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "ecp.security.jwt-secret=test-only-jwt-secret-for-backend-tests-0001", "ecp.demo.seed=false",
-        "ecp.alerts.poll-interval=PT1H", "ecp.alerts.escalation-interval=PT1H"})
+        "ecp.alerts.poll-interval=PT1H", "ecp.alerts.escalation-interval=PT1H",
+        // the audit chain worker (audit service) would otherwise read audit_outbox while these tests clear it
+        "ecp.audit.scheduler.enabled=false"})
 @Testcontainers
 class AlertPushTest {
 
