@@ -7,7 +7,7 @@ guidance notes before submitting.
 
 | Member           | GitHub Username | Role                          |
 |------------------|-----------------|-------------------------------|
-| Aayushee Bhat    | @aayushee-bhat  | [Main area of responsibility] |
+| Aayushee Bhat    | @aayushee-bhat  | Analytics |
 | Anela Qurioz     | @anelajoy       | [Main area of responsibility] |
 | Dumebi Onyebuchi | @dumebi2003     | [Main area of responsibility] |
 | Joshua Dominick  | @Joshuadommy    | [Main area of responsibility] |
