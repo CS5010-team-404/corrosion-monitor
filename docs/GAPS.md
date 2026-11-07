@@ -26,10 +26,8 @@ Owners: Aayushee (analytics), Dumebi (alerts), Anela (audit), Joshua (platform/f
 - Mismatch: `docs/1-api-contract.md` still lists `/alerts/{id}/ack` and Operator as the acting role; the code follows the UI and CONTRACTS.md (`/acknowledge`, TECHNICIAN and ADMIN). Owner: Dumebi
 
 ### Anela: audit
-- Missing: `GET /api/v1/audit?size=&page=&actor=&action=` → `AuditEntry[]`. Owner: Anela
-- Missing: `POST /api/v1/audit/verify` → `{intact, checked, firstBrokenId}`. Owner: Anela
-- Mismatch: `audit_log` has event_type/user_id/resource/outcome, while the UI expects occurredAt/actorType/actor/action/entityType/entityId. Owner: Anela
-- Missing: consumer of `audit_outbox` that writes the hash chain and sets `chained_at`. Owner: Anela
+- Missing: `GET /api/v1/audit` entries don't include `prevHash` and `hash` yet; the Audit page shows "–" in the Hash column until they do. Owner: Anela
+- Mismatch: the UI asks for `size=500`, the backend caps a page at 200, so the page shows the newest 200 entries. Owner: Anela + Joshua
 
 ### Joshua: platform
 - Duplicate: team `forecast` table vs platform forecast API (`/api/v1/sensors/{id}/forecast`); decide which analytics uses. Owner: Joshua + Aayushee
@@ -49,6 +47,7 @@ Owners: Aayushee (analytics), Dumebi (alerts), Anela (audit), Joshua (platform/f
 - JWT: HS256 with `ECP_JWT_SECRET` (startup fails if missing or < 32 bytes), `sub` = email, `roles` = [role], `name`, 8 hours; validated exactly like the platform. 07c7480
 - Security: stateless, CSRF off, role rules per CONTRACTS, CORS for `FRONTEND_HOST` + localhost:5173, health-only actuator (replaces the generated Basic-auth password). d19a992
 - Audit: `USER_LOGIN`, `USER_LOGIN_FAILED`, `ACCOUNT_LOCKED` written to `audit_outbox`. e689d86
+- Audit: `GET /api/v1/audit` (managers and admins), `POST /api/v1/audit/verify` (admins; others get 403 "Administrator access required.") and the outbox-to-chain worker, from PR #5 and #6. The UI uses them directly.
 - Demo users (one per role) from `ECP_DEMO_PASSWORD`. 62c7cff
 - UI signs in with email. 9578a2a
 - Runnable backend jar, `backend/Dockerfile`, and the `render.yaml` api block with the env vars the backend reads. ed345f2, 081e0ff
