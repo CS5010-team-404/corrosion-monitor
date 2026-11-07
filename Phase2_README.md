@@ -9,7 +9,7 @@ guidance notes before submitting.
 |------------------|-----------------|-------------------------------|
 | Aayushee Bhat    | @aayushee-bhat  | Analytics |
 | Anela Qurioz     | @anelajoy       | [Main area of responsibility] |
-| Dumebi Onyebuchi | @dumebi2003     | [Main area of responsibility] |
+| Dumebi Onyebuchi | @dumebi2003     | Alerts |
 | Joshua Dominick  | @Joshuadommy    | [Main area of responsibility] |
 
 ## Repository Structure
@@ -104,7 +104,7 @@ No Java? `cd frontend && npm install && npm run dev:mock` runs the dashboard aga
 | FR1: Read temperature and humidity from multiple sensors at adjustable intervals | Partial | Simulated SHT31 sensors (10 scenarios), a Raspberry Pi client and a signed ingestion API are built. [TODO: confirm running end to end, and adjustable intervals]     |
 | FR2: Forecast condensation 15-60 minutes ahead                                   | Partial | ML forecaster trained and evaluated (`docs/ML_FORECAST.md`), with a forecast API in the platform. [TODO: confirm it feeds the dashboard and alerts]                  |
 | FR3: Warning and critical alerts, with escalation                                | [TODO]  | Sensor health writes alert signals; [TODO: alert service status, escalation, email]                                                                                  |
-| FR4: Acknowledge alerts and record corrective actions                            | [TODO]  | [TODO]                                                                                                                                                               |
+| FR4: Acknowledge alerts and record corrective actions                            | Partial  | [TODO]                                                                                                                                                               |
 | FR5: Roles with enforced access levels                                           | Partial | Sign-in, BCrypt hashing, 5-failure lockout and role-bearing tokens (four roles) are done; the platform accepts the same token. [TODO: which endpoints enforce roles] |
 | FR6: Accurate audit log                                                          | Partial | Sign-in events and platform events are written to `audit_outbox`. [TODO: status of chaining into `audit_log`, and of verification]                                   |
 | FR7: Export reports (CSV/PDF)                                                    | [TODO]  | [TODO]                                                                                                                                                               |
