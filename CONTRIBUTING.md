@@ -89,7 +89,7 @@ Short, present-tense messages that say what changed:
 
 - **No secrets in the repo**: passwords, sensor keys, tokens, `.env`. If one is committed by mistake, tell the team immediately and change it. Deleting it in a later commit is not enough.
 - Agree API changes in a PR to `docs/1-api-contract.md` **before** changing code that depends on them.
-- Schema changes go through `db/schema.sql` in a PR and are announced to the team.
+- The backend creates the schema with Flyway on startup (`backend/src/main/resources/db/migration`). Schema changes are a new `V<n>__description.sql` file in a PR and are announced to the team.
 - Every new feature needs at least one unit test.
 - Label simulated data and results as simulated in code, charts, and slides.
 - Use Java 17 locally to match CI.

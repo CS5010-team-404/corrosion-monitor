@@ -1,3 +1,7 @@
+-- SUPERSEDED: the schema is now created by Flyway from backend/src/main/resources/db/migration
+-- (V1__team_schema.sql is this file, V2 and later hold the agreed changes; see docs/DECISIONS.md).
+-- Kept for reference only: do not run it. Change the schema with a new migration, not here.
+--
 -- Electronics Corrosion Prevention: MySQL 8.0.16+ schema (v1)
 -- CHECK constraints are only enforced from 8.0.16 onward. Use InnoDB (default).
 -- Store and read all timestamps in UTC: connect with serverTimezone=UTC.

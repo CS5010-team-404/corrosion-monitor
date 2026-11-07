@@ -36,3 +36,7 @@ db_data/
 
 # Node (if the frontend uses it)
 node_modules/
+
+# Local run (scripts/run-local.sh): generated local-only secrets, logs and pids
+.env.local
+.run/
