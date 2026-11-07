@@ -140,11 +140,11 @@ Corrosion Watch is running locally.
              admin@corrosionwatch.app      Admin
 
   Works now (backend + platform):
-    Sign-in, Sensor health, Admin > simulator and devices, sensor forecasts.
+    Sign-in, Sensor health, Admin > simulator and devices, sensor forecasts,
+    Audit log (managers and admins; Verify chain is admin-only).
   Waiting for teammates' endpoints (these show an error state until they exist; docs/GAPS.md):
     Overview, Equipment       equipment status and assessments   (Aayushee); alerts (Dumebi)
     Alerts                    alert list, detail and actions     (Dumebi)
-    Audit                     audit log and chain check          (Anela)
     Reports                   report summary, CSV and PDF        (Aayushee with Dumebi)
     Admin > users, profiles   /api/v1/admin/users, /api/v1/profiles (team)
 
