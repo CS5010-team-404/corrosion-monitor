@@ -33,7 +33,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  */
 @SpringBootTest(properties = {
         "ecp.security.jwt-secret=test-only-jwt-secret-for-backend-tests-0001",
-        "ecp.demo.password=" + AuthControllerTest.PASSWORD})
+        "ecp.demo.password=" + AuthControllerTest.PASSWORD,
+        "ecp.audit.scheduler.enabled=false"})
 @AutoConfigureMockMvc
 @Testcontainers
 class AuthControllerTest {
@@ -128,11 +129,20 @@ class AuthControllerTest {
     void auditDetailsNeverContainPasswordsOrTokens() throws Exception {
         tokenFor("tech@corrosionwatch.app");
         login("tech@corrosionwatch.app", "a-wrong-password-123").andExpect(status().isUnauthorized());
-        List<String> details = jdbc.queryForList("SELECT CAST(details AS CHAR) FROM audit_outbox", String.class);
-        assertThat(details).isNotEmpty().noneMatch(d -> d.contains(PASSWORD) || d.contains("a-wrong-password-123")
+        // No password or token anywhere in the outbox, whichever service wrote the row.
+        List<String> allDetails = jdbc.queryForList(
+                "SELECT CAST(details AS CHAR) FROM audit_outbox WHERE details IS NOT NULL", String.class);
+        assertThat(allDetails).noneMatch(d -> d.contains(PASSWORD) || d.contains("a-wrong-password-123")
                 || d.contains("eyJ"));
-        assertThat(jdbc.queryForList("SELECT DISTINCT actor_type FROM audit_outbox", String.class)).containsExactly("USER");
-        assertThat(jdbc.queryForList("SELECT DISTINCT entity_type FROM audit_outbox", String.class)).containsExactly("user");
+        // Login events only: the audit service also writes events (entity_type audit), which are allowed.
+        String loginEvents = "action IN ('USER_LOGIN', 'USER_LOGIN_FAILED', 'ACCOUNT_LOCKED')";
+        List<String> loginDetails = jdbc.queryForList(
+                "SELECT CAST(details AS CHAR) FROM audit_outbox WHERE " + loginEvents, String.class);
+        assertThat(loginDetails).isNotEmpty();
+        assertThat(jdbc.queryForList("SELECT DISTINCT actor_type FROM audit_outbox WHERE " + loginEvents, String.class))
+                .containsExactly("USER");
+        assertThat(jdbc.queryForList("SELECT DISTINCT entity_type FROM audit_outbox WHERE " + loginEvents, String.class))
+                .containsExactly("user");
     }
 
     @Test
@@ -174,9 +184,17 @@ class AuthControllerTest {
         // admin paths: admins only
         mvc.perform(get("/api/v1/admin/users").header("Authorization", tech))
                 .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value("FORBIDDEN"));
-        // reports and audit: managers and admins (404 = allowed through security, endpoint not built yet)
+        // audit (docs/CONTRACTS.md): MANAGER and ADMIN 200; TECHNICIAN and OPERATOR 403; no token 401
+        // the lock test above leaves this user locked; clear it so the order of tests does not matter
+        jdbc.update("UPDATE app_user SET failed_logins = 0, locked_until = NULL WHERE email = ?",
+                "admin@corrosionwatch.app");
+        String admin = "Bearer " + tokenFor("admin@corrosionwatch.app");
+        String operator = "Bearer " + tokenFor("operator@corrosionwatch.app");
+        mvc.perform(get("/api/v1/audit").header("Authorization", manager)).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/audit").header("Authorization", admin)).andExpect(status().isOk());
         mvc.perform(get("/api/v1/audit").header("Authorization", tech)).andExpect(status().isForbidden());
-        mvc.perform(get("/api/v1/audit").header("Authorization", manager)).andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/audit").header("Authorization", operator)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/audit")).andExpect(status().isUnauthorized());
         // acting on alerts: technicians and admins
         mvc.perform(post("/api/v1/alerts/1/acknowledge").header("Authorization", manager)).andExpect(status().isForbidden());
         mvc.perform(post("/api/v1/alerts/1/acknowledge").header("Authorization", tech)).andExpect(status().isNotFound());

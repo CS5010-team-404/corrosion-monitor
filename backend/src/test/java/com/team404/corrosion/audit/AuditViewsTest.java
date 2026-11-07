@@ -68,5 +68,10 @@ class AuditViewsTest {
         assertFalse(AuditViews.isAdmin(List.of("admin")));
         assertFalse(AuditViews.isAdmin(List.of()));
         assertFalse(AuditViews.isAdmin(null));
+        assertTrue(AuditViews.canViewLog(List.of("MANAGER")));
+        assertTrue(AuditViews.canViewLog(List.of("ADMIN")));
+        assertFalse(AuditViews.canViewLog(List.of("OPERATOR")));
+        assertFalse(AuditViews.canViewLog(List.of("TECHNICIAN")));
+        assertFalse(AuditViews.canViewLog(null));
     }
 }

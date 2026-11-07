@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Admin-only view of the audit log, with the paths and field names the dashboard expects (docs/GAPS.md). The role is
+ * View of the audit log (list: managers and admins; verify and checkpoints: admins only), with the paths and field names the dashboard expects (docs/GAPS.md). The role is
  * checked here on the server from the token's roles claim, so hiding a button in the UI is never the only protection.
  * Refused requests are themselves recorded (ACCESS_DENIED).
  */
@@ -49,7 +49,7 @@ public class AuditController {
                                   @RequestParam(name = "to", required = false) Instant to,
                                   @RequestParam(name = "page", defaultValue = "0") int page,
                                   @RequestParam(name = "size", defaultValue = "50") int size) {
-        ResponseEntity<?> denied = requireAdmin(jwt, "GET /api/v1/audit");
+        ResponseEntity<?> denied = requireRole(jwt, "GET /api/v1/audit", false);
         if (denied != null) {
             return denied;
         }
@@ -102,14 +102,20 @@ public class AuditController {
 
     /** Returns null when the caller is an administrator, otherwise the error response to send. */
     private ResponseEntity<?> requireAdmin(Jwt jwt, String endpoint) {
+        return requireRole(jwt, endpoint, true);
+    }
+
+    /** adminOnly false also lets MANAGER through (the audit list); verify, checkpoints stay admin-only. */
+    private ResponseEntity<?> requireRole(Jwt jwt, String endpoint, boolean adminOnly) {
         if (jwt == null) {
             return errors.response(HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED", "Sign in required.", Map.of());
         }
-        if (AuditViews.isAdmin(jwt.getClaimAsStringList(ROLES_CLAIM))) {
+        List<String> roles = jwt.getClaimAsStringList(ROLES_CLAIM);
+        if (adminOnly ? AuditViews.isAdmin(roles) : AuditViews.canViewLog(roles)) {
             return null;
         }
         audit.recordDenied(jwt.getSubject(), endpoint);
-        return errors.response(HttpStatus.FORBIDDEN, "FORBIDDEN", "Administrator access required.", Map.of());
+        return errors.response(HttpStatus.FORBIDDEN, "FORBIDDEN", adminOnly ? "Administrator access required." : "Manager or administrator access required.", Map.of());
     }
 
     private static LocalDateTime toLocal(Instant t) {
