@@ -1,0 +1,8 @@
+# Flyway checksums of the migrations applied in production (Aiven), as flyway_schema_history records them.
+# MigrationChecksumTest fails if any of these files changes. Never edit a listed migration; add a new one instead.
+# When a new migration has been merged into dev and deployed, add its line here.
+# version checksum file
+1 -1653865736 V1__team_schema.sql
+2 -1064722155 V2__agreed_changes.sql
+3 523928711 V3__demo_reference_data.sql
+4 1083147086 V4__audit_chain.sql

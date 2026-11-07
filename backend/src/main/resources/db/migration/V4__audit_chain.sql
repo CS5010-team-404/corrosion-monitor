@@ -1,8 +1,10 @@
 -- AUDIT SERVICE: the hash-chained audit log.
 --
--- V1 created an audit_log table that nothing chains into. It is renamed here, not dropped, so no data is lost.
--- Its two append-only triggers stay on the renamed table, and it can be dropped once you are sure it is empty.
--- audit_outbox (created in V2) is not touched here. The audit worker only sets its chained_at column.
+-- BEFORE YOU USE THIS FILE:
+-- 1. V4 is a guess. Look at the migrations already in this folder and use the next free number.
+-- 2. V1 created an audit_log table that nothing chains into. It is renamed here, not dropped, so no data is lost.
+--    Its two append-only triggers stay on the renamed table. Once you are sure it is empty, it can be dropped.
+-- 3. audit_outbox (created in V2) is not touched here. The audit worker only sets its chained_at column.
 
 RENAME TABLE audit_log TO audit_log_v1;
 
