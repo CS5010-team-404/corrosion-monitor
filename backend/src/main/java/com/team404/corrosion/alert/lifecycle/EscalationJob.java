@@ -8,7 +8,6 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -40,7 +39,7 @@ public class EscalationJob {
         this.after = after;
     }
 
-    @Scheduled(fixedDelayString = "${ecp.alerts.escalation-interval:PT30S}")
+    /** One check. Run by AlertScheduler. */
     public void poll() {
         try {
             escalateDue();

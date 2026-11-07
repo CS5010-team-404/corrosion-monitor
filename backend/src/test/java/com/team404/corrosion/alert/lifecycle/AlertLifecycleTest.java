@@ -46,8 +46,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @SpringBootTest(properties = {
         "ecp.security.jwt-secret=test-only-jwt-secret-for-backend-tests-0001",
         "ecp.demo.seed=false",
-        // keep the background jobs out of the way; the tests call the escalation job themselves
-        "ecp.alerts.poll-interval=PT1H", "ecp.alerts.escalation-interval=PT1H",
+        // the tests call the alert jobs themselves
+        "ecp.alerts.scheduler.enabled=false",
         // the audit chain worker (audit service) would otherwise read audit_outbox while these tests clear it
         "ecp.audit.scheduler.enabled=false"})
 @AutoConfigureMockMvc

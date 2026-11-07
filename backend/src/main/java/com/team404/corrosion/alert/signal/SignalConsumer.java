@@ -11,7 +11,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -42,7 +41,7 @@ public class SignalConsumer {
         this.batchSize = batchSize;
     }
 
-    @Scheduled(fixedDelayString = "${ecp.alerts.poll-interval:PT5S}")
+    /** One poll: drain the queue, then auto-resolve. Run by AlertScheduler. */
     public void poll() {
         try {
             int handled;
