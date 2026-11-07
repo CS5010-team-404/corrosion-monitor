@@ -4,5 +4,5 @@ import java.time.Instant;
 import java.util.List;
 
 public interface AnalyticsRepo {
-    List<EquipmentSnap>loadSnapshots(Instant since);
+    List<EquipmentSnap> loadSnapshots(Instant since);
 }
