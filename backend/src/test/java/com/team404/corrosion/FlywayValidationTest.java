@@ -20,7 +20,9 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * Starts the backend on a fresh MySQL 8.4 (as on Aiven): Flyway applies every migration and the context starts with
  * spring.jpa.hibernate.ddl-auto=validate, so a mismatch between entities and migrations fails here.
  */
-@SpringBootTest(properties = "ecp.security.jwt-secret=test-only-jwt-secret-for-backend-tests-0001")
+@SpringBootTest(properties = {
+        "ecp.security.jwt-secret=test-only-jwt-secret-for-backend-tests-0001",
+        "ecp.audit.scheduler.enabled=false"})
 @Testcontainers
 class FlywayValidationTest {
 
@@ -66,10 +68,11 @@ class FlywayValidationTest {
     @Test
     void auditLogIsAppendOnly() {
         jdbc.update("""
-                INSERT INTO audit_log (ts, event_type, outcome, prev_hash, hash)
-                VALUES (NOW(3), 'TEST', 'SUCCESS', REPEAT('0', 64), SHA2('append-only-test', 256))
+                INSERT INTO audit_log (id, outbox_id, occurred_at, recorded_at, actor_type, actor, action,
+                                       prev_hash, entry_hash)
+                VALUES (1, 1, NOW(3), NOW(3), 'SYSTEM', 'test', 'TEST', REPEAT('0', 64), SHA2('append-only-test', 256))
                 """);
-        assertThatThrownBy(() -> jdbc.update("UPDATE audit_log SET outcome = 'FAILURE'"))
+        assertThatThrownBy(() -> jdbc.update("UPDATE audit_log SET action = 'TAMPERED'"))
                 .isInstanceOf(DataAccessException.class)
                 .hasMessageContaining("append-only");
         assertThatThrownBy(() -> jdbc.update("DELETE FROM audit_log"))
