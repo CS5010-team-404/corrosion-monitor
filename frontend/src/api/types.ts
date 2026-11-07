@@ -47,8 +47,10 @@ export interface Alert {
 export interface CorrectiveAction { id: number; actionType: string; notes: string | null; username: string; performedAt: string; }
 export interface AlertDetail { alert: Alert; actions: CorrectiveAction[]; }
 
-export interface AuditEntry { id: number; occurredAt: string; actorType: string; actor: string; action: string; entityType: string | null; entityId: string | null; prevHash: string; hash: string; }
-export interface ChainVerification { intact: boolean; checked: number; firstBrokenId: number | null; }
+export interface AuditEntry { id: number; occurredAt: string; actorType: string; actor: string; action: string; entityType: string | null; entityId: string | null; details?: string | null;
+  /** Not returned by GET /api/v1/audit yet (docs/GAPS.md); the page shows "–" until they are. */
+  prevHash?: string | null; hash?: string | null; }
+export interface ChainVerification { intact: boolean; checked: number; firstBrokenId: number | null; message?: string; }
 
 export interface ReportSummary {
   from: string | null; to: string | null; alertsOpened: number; meanMinutesToAcknowledge: number | null; correctiveActions: number;

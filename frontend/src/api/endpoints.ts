@@ -29,8 +29,6 @@ export const PENDING = {
   acknowledge: pending("acknowledge", "Acknowledging alerts", "POST /api/v1/alerts/{id}/acknowledge", "Dumebi"),
   resolve: pending("resolve", "Resolving alerts", "POST /api/v1/alerts/{id}/resolve", "Dumebi"),
   addAction: pending("addAction", "Logging corrective actions", "POST /api/v1/alerts/{id}/actions", "Dumebi"),
-  auditLog: pending("auditLog", "The audit log", "GET /api/v1/audit", "Anela"),
-  verifyChain: pending("verifyChain", "Chain verification", "POST /api/v1/audit/verify", "Anela"),
   reportSummary: pending("reportSummary", "The report summary", "GET /api/v1/reports/summary", "Aayushee with Dumebi"),
   reportCsv: pending("reportCsv", "The CSV report", "GET /api/v1/reports/summary.csv", "Aayushee with Dumebi"),
   reportPdf: pending("reportPdf", "The PDF report", "GET /api/v1/reports/summary.pdf", "Aayushee with Dumebi"),
@@ -66,8 +64,8 @@ export const resolve = (id: number, notes?: string) => post<T.Alert>(`/api/v1/al
 export const addAction = (id: number, actionType: string, notes: string) => post<T.CorrectiveAction>(`/api/v1/alerts/${id}/actions`, { actionType, notes }, PENDING.addAction);
 
 // audit (Anela)
-export const auditLog = (params: { size?: number; page?: number; actor?: string; action?: string } = {}) => api<T.AuditEntry[]>(`/api/v1/audit${q({ size: 500, ...params })}`, {}, PENDING.auditLog);
-export const verifyChain = () => post<T.ChainVerification>("/api/v1/audit/verify", undefined, PENDING.verifyChain);
+export const auditLog = (params: { size?: number; page?: number; actor?: string; action?: string } = {}) => api<T.AuditEntry[]>(`/api/v1/audit${q({ size: 500, ...params })}`, {});
+export const verifyChain = () => post<T.ChainVerification>("/api/v1/audit/verify");
 
 // reports (Aayushee with Dumebi)
 export const reportSummary = (from: number | null, to: number | null, location: string) =>
