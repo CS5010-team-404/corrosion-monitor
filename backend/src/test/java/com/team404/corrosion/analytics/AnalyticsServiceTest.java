@@ -39,7 +39,13 @@ class AnalyticsServiceTest{
     }
 
     private static EquipmentSnap snapshot(boolean trusted, List<Reading> readings) {
+        return snapshot("it", 18, 27, 1.5, trusted, readings);
+    }
+
+    private static EquipmentSnap snapshot(String kind, double tempMinC, double tempMaxC, double surfaceOffsetC,
+                                          boolean trusted, List<Reading> readings) {
         return new EquipmentSnap(1, "Rack A1", "Server Room A", 1, "IT equipment (ASHRAE)",
+                kind, tempMinC, tempMaxC, surfaceOffsetC,
                 new RiskClassifier.Thresholds(3.0, 1.0, 60.0, 70.0), 100, 2.66, 0.79, 25, 40, 7L, "SIM-001", trusted, readings);
     }
 
@@ -109,6 +115,27 @@ class AnalyticsServiceTest{
         FakeRepo repo = new FakeRepo(List.of());
         serviceWith(repo).equipmentStatuses();
         assertEquals(NOW.minusSeconds(24 * 3600), repo.askedSince);
+    }
+
+    @Test
+    void profileDataComesFromTheSnapshotNotFromJava() {
+        // a plc profile with a 3 C cold-spot offset: the surface temperature must use that offset
+        EquipmentSnap plc = snapshot("plc", 0, 55, 3.0, true, List.of(reading(0, 25, 50, null)));
+        EquipmentStatus s = serviceWith(new FakeRepo(List.of(plc))).equipmentStatuses().get(0);
+        assertEquals("plc", s.profileKind());
+        assertEquals(0.0, s.tempMinC(), 1e-9);
+        assertEquals(55.0, s.tempMaxC(), 1e-9);
+        assertEquals(3.0, s.surfaceOffsetC(), 1e-9);
+        assertEquals(22.0, s.surfaceTempC(), 1e-9);    // 25 - 3.0
+    }
+
+    @Test
+    void unknownStatusStillReportsTheProfileData() {
+        EquipmentSnap noSensor = snapshot("tel", 5, 40, 1.5, false, List.of());
+        EquipmentStatus s = serviceWith(new FakeRepo(List.of(noSensor))).equipmentStatuses().get(0);
+        assertEquals(RiskLevel.UNKNOWN, s.riskLevel());
+        assertEquals("tel", s.profileKind());
+        assertEquals(40.0, s.tempMaxC(), 1e-9);
     }
 
     @Test

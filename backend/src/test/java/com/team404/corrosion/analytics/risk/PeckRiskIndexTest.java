@@ -32,7 +32,7 @@ public class PeckRiskIndexTest{
 
     @Test
     void zeroHumidityReadingDoesNotZeroTheFactor(){
-        assertTrue(model.accelarationFactor(25, 0)>0);
+        assertTrue(model.accelerationFactor(25, 0)>0);
     }
 
     @Test
@@ -42,26 +42,26 @@ public class PeckRiskIndexTest{
 
     @Test
     void humidityTermFollowsThePowerLaw(){
-        assertEquals(Math.pow(2.0,2.66), model.accelarationFactor(25, 80), 1e-9);
+        assertEquals(Math.pow(2.0,2.66), model.accelerationFactor(25, 80), 1e-9);
     }
 
     @Test
     void accelerationFactorIsOneAtTheReferenceCondition(){
-        assertEquals(1.0, model.accelarationFactor(25, 40), 1e-9);
+        assertEquals(1.0, model.accelerationFactor(25, 40), 1e-9);
     }
 
     @Test
     void humidAndWarmDamagesFasterThanDryAndCool(){
-        assertTrue(model.accelarationFactor(30, 80)>model.accelarationFactor(20, 40));
+        assertTrue(model.accelerationFactor(30, 80)>model.accelerationFactor(20, 40));
     }
 
     @Test
     void higherHumidityAloneRaisesTheFactor(){
-        assertTrue(model.accelarationFactor(25, 70)>model.accelarationFactor(25, 50));
+        assertTrue(model.accelerationFactor(25, 70)>model.accelerationFactor(25, 50));
     }
 
     @Test
     void higherTemperatureAloneRaisesTheFactor(){
-        assertTrue(model.accelarationFactor(35, 40) > model.accelarationFactor(25, 40));
+        assertTrue(model.accelerationFactor(35, 40) > model.accelerationFactor(25, 40));
     }
 }

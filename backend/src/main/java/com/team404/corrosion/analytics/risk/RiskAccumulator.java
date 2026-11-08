@@ -1,10 +1,10 @@
 package com.team404.corrosion.analytics.risk;
 
 public final class RiskAccumulator{
-    public static final double max_dt_sec=300;
+    public static final double MAX_DT_SECONDS=300;
     private final double budget;
     private final PeckRiskIndex model;
-    public double cumulativeDamage;
+    private double cumulativeDamage;
 
     public RiskAccumulator(PeckRiskIndex model, double budget){
         if(budget <= 0){
@@ -15,7 +15,7 @@ public final class RiskAccumulator{
     }
 
     public double update(double tempC, double rhPct, double dtSeconds){
-        double cappedDt = Math.min(dtSeconds, max_dt_sec);
+        double cappedDt = Math.min(dtSeconds, MAX_DT_SECONDS);
         cumulativeDamage += model.damage(tempC, rhPct, cappedDt);
         return score();
     }

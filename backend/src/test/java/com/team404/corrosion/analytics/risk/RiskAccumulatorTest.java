@@ -39,7 +39,7 @@ public class RiskAccumulatorTest{
         afterOutage.update(25, 40,3*3600);
 
         RiskAccumulator capped = new RiskAccumulator(model, 100);
-        capped.update(25, 40, RiskAccumulator.max_dt_sec);
+        capped.update(25, 40, RiskAccumulator.MAX_DT_SECONDS);
 
         assertEquals(capped.cumulativeDamage(), afterOutage.cumulativeDamage(), 1e-12);
     }
