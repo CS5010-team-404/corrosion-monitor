@@ -22,7 +22,6 @@ export const login = async (email: string, password: string): Promise<T.LoginRes
 // Platform and auth endpoints are not listed, so they are never replaced. Remove an entry once the endpoint ships.
 const pending = (key: string, what: string, endpoint: string, owner: string): Pending => ({ key, what, endpoint, owner });
 export const PENDING = {
-  equipmentStatus: pending("equipmentStatus", "Equipment status", "GET /api/v1/equipment/status", "Aayushee"),
   assessments: pending("assessments", "Equipment history", "GET /api/v1/equipment/{id}/assessments", "Aayushee"),
   reportSummary: pending("reportSummary", "The report summary", "GET /api/v1/reports/summary", "Aayushee with Dumebi"),
   reportCsv: pending("reportCsv", "The CSV report", "GET /api/v1/reports/summary.csv", "Aayushee with Dumebi"),
@@ -35,7 +34,7 @@ const range = (from: number | null, to: number | null, location: string) =>
   q({ from: from ? new Date(from).toISOString() : null, to: to ? new Date(to).toISOString() : null, location: location === "all" ? null : location });
 
 // analytics (Aayushee)
-export const equipmentStatus = () => api<T.EquipmentStatus[]>("/api/v1/equipment/status", {}, PENDING.equipmentStatus);
+export const equipmentStatus = () => api<T.EquipmentStatus[]>("/api/v1/equipment/status");
 export const assessments = (equipmentId: number, minutes: number) => api<T.AssessmentPoint[]>(`/api/v1/equipment/${equipmentId}/assessments${q({ minutes })}`, {}, PENDING.assessments);
 
 // data platform (Joshua)
