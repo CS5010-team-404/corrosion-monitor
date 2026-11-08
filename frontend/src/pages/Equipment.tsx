@@ -5,7 +5,7 @@ import { Menu } from "../components/Dropdown";
 import { Icon } from "../components/Icon";
 import { Badge, ErrorState, PageSkeleton, Segmented, Skeleton } from "../components/ui";
 import { LineChart, MarginRail } from "../components/viz";
-import { saveBlob } from "../lib/api";
+import { isNotBuilt, saveBlob } from "../lib/api";
 import { config } from "../lib/config";
 import { ago, clamp, dShort, fmt, label, marginTone } from "../lib/format";
 import { useLive } from "../lib/live";
@@ -43,6 +43,8 @@ export function Equipment({ id }: { id: number }) {
       { points: [[last.t, last.dewPointC], [last.t + 60 * 60000, last.dewPointC]] as [number, number][], color: "var(--dew)", dash: "5 5" },
     ] : []),
   ] : [];
+  // GET /api/v1/equipment/{id}/assessments isn't built yet: the chart says so, the rest of the page uses real data.
+  const historyMissing = isNotBuilt(pts.error);
   const myAlerts = (al.data ?? []).filter((a) => a.equipmentId === id).slice(0, 4);
   const exportCsv = () => {
     const rows = ["measured_at,temperature_c,humidity_pct,surface_temp_c,dew_point_c,margin_c", ...(pts.data ?? []).map((p) => [p.measuredAt, p.temperatureC, p.humidityPct, p.surfaceTempC, p.dewPointC, p.marginC].map((v) => (typeof v === "number" ? v.toFixed(2) : v)).join(","))];
@@ -62,7 +64,7 @@ export function Equipment({ id }: { id: number }) {
           <span className="ttl">{e.equipmentName}</span>
           <Menu width={230} trigger={(toggle) => <button className="circle-btn" onClick={toggle} aria-label="More actions"><Icon name="more" /></button>}>
             {(close) => <>
-              <button className="opt" onClick={() => { close(); exportCsv(); }}><span className="ck"><Icon name="download" /></span>Export readings (CSV)</button>
+              {!historyMissing && <button className="opt" onClick={() => { close(); exportCsv(); }}><span className="ck"><Icon name="download" /></span>Export readings (CSV)</button>}
               {e.sensorId && <button className="opt" onClick={() => { close(); navigate(`/health?sensor=${e.sensorId}`); }}><span className="ck"><Icon name="wifi" /></span>Open sensor {e.deviceId}</button>}
               <button className="opt" onClick={() => { close(); navigate(`/alerts?q=${encodeURIComponent(e.equipmentName)}`); }}><span className="ck"><Icon name="bell" /></span>View alerts</button>
             </>}
@@ -88,7 +90,8 @@ export function Equipment({ id }: { id: number }) {
         <div className="card-head"><div><h2>Temperature and forecast</h2><p className="small muted" style={{ margin: "4px 0 0" }}>Dashed lines after now are the 60-minute forecast{f ? ` (${f.modelVersion})` : ""}</p></div>
           <Segmented label="Range" value={range} onChange={setRange} items={[{ key: 60, label: "1 h" }, { key: 120, label: "2 h" }, { key: 240, label: "4 h" }]} /></div>
         <MarginRail large dew={e.dewPointC} surface={e.surfaceTempC} warn={e.marginWarningC} crit={e.marginCriticalC} untrusted={!e.trusted} />
-        {pts.loading ? <Skeleton h={250} /> : <LineChart series={chart} unit="°" now={last?.t} label="Air, surface and dew point temperature with forecast" />}
+        {historyMissing ? <div className="empty" role="status"><div className="circ"><Icon name="clock" /></div><b>Not built yet</b>{(pts.error as Error).message}</div>
+          : pts.loading ? <Skeleton h={250} /> : <LineChart series={chart} unit="°" now={last?.t} label="Air, surface and dew point temperature with forecast" />}
         <div className="legend"><span><i style={{ background: "var(--surf)" }} />Surface</span><span><i style={{ background: "var(--dew)" }} />Dew point</span><span><i style={{ background: "var(--line-2)" }} />Air</span></div>
       </div></div>
 
