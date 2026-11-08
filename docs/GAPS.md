@@ -9,17 +9,16 @@ Owners: Aayushee (analytics), Dumebi (alerts), Anela (audit), Joshua (platform/f
 
 ### Team (users and configuration)
 - Missing: `GET /api/v1/admin/users` (`User`: username, fullName, enabled, lockedUntil, lastLoginAt; there are no `enabled`/`last_login_at` columns). Owner: team
-- Missing: `GET /api/v1/profiles`. `equipment_profile` has no `tempMinC`/`tempMaxC`/`surfaceOffsetC` and names its columns `rh_warn_pct`/`dew_margin_warn_c`. Owner: team
+- Missing: `GET /api/v1/profiles`. `equipment_profile` now has `kind`, `temp_min_c`, `temp_max_c` and `surface_offset_c` (V8), but the endpoint does not exist, and the columns are named `rh_warn_pct`/`dew_margin_warn_c`. Owner: team
 - Missing: `/topic/risk` messages (`/ws` now exists, see Done; analytics publishes through `SimpMessagingTemplate`). Owner: Aayushee
 - Mismatch: `docs/1-api-contract.md` still mentions an Auditor role; decision 4 has four roles (TECHNICIAN, OPERATOR, MANAGER, ADMIN). Owner: team
 
 ### Aayushee: analytics
-- Missing: `GET /api/v1/equipment/status` → `EquipmentStatus[]`. Owner: Aayushee
-- Missing: `GET /api/v1/equipment/{id}/assessments?minutes=` → `AssessmentPoint[]`. Owner: Aayushee
-- Confirm or replace demo profile thresholds and risk_budget in V3 with cited values. Owner: Aayushee
-- Missing: a `risk_assessments` table (ARCHITECTURE.md); the schema has `risk_state` and `forecast`, both keyed by location rather than equipment. Owner: Aayushee
-- Missing: reading platform `readings` per equipment (`sensors.equipment_id`) and skipping `sensor_health.trusted = false`. Owner: Aayushee
-- Missing: producing `alert_signals` (`ANALYTICS:CONDENSATION_RISK:<id>`, `ANALYTICS:CONDENSATION_FORECAST:<id>`). Owner: Aayushee
+- Missing: `GET /api/v1/equipment/{id}/assessments?minutes=` → `AssessmentPoint[]` (next analytics PR). Owner: Aayushee
+- Missing: the 15, 30 and 60 minute margins and `predictedCondensationAt` in `GET /api/v1/equipment/status` (they are null for now); fill them from the platform forecaster (`ecp-forecast`) in a later PR. Owner: Aayushee
+- Confirm or replace the demo profile thresholds and risk_budget in V3, and the demo kind, temperature range and cold-spot offset added in V8, with cited values. Owner: Aayushee
+- Missing: a `risk_assessments` table (ARCHITECTURE.md); the schema has `risk_state` and `forecast`, both keyed by location rather than equipment. The status endpoint now computes the risk index on each request from the last 24 hours of readings. Owner: Aayushee
+- Missing: producing `alert_signals` (`ANALYTICS:CONDENSATION_RISK:<id>`, `ANALYTICS:CONDENSATION_FORECAST:<id>`) (a later PR, after the assessments endpoint and the forecast). Owner: Aayushee
 - Missing: `GET /api/v1/reports/summary` and `.csv` / `.pdf` (no OpenPDF dependency). Owner: Aayushee with Dumebi
 
 ### Dumebi: alerts
@@ -37,6 +36,7 @@ Owners: Aayushee (analytics), Dumebi (alerts), Anela (audit), Joshua (platform/f
 - `alert` + `alert_signals` and `audit_log` + `audit_outbox` have different roles (state vs inbox); keep both.
 
 ## Done
+- Equipment status: `GET /api/v1/equipment/status` → `EquipmentStatus[]` (any signed-in user) with dew point, condensation margin, Peck risk index and time of wetness over the last 24 hours, and a NORMAL / WARNING / CRITICAL / UNKNOWN level from the profile thresholds. It reads platform `readings` per equipment through `sensors.equipment_id`, only from sensors with `sensor_health.trusted = TRUE` (a trusted sensor is preferred when an item has several, and an item with no trusted reading is UNKNOWN). The dew point is the shared `alert.calculation.DewPoint`. `equipment_profile` gets `kind`, `temp_min_c`, `temp_max_c` and `surface_offset_c` in V8, so the UI fields no longer come from Java. Covered by unit tests and by `EquipmentStatusIntegrationTest` (real SQL on MySQL with the production settings).
 - Alert audit and live updates: every alert state change (opened, acknowledged, resolved by a user or by the quiet period, escalated, corrective action logged) writes `audit_outbox` in the same transaction (`ALERT_OPENED`, `ALERT_ACKNOWLEDGED`, `ALERT_RESOLVED`, `ALERT_ESCALATED`, `CORRECTIVE_ACTION_LOGGED`; entity `alert`), and after commit a notice `{alertId, action}` goes to `/topic/alerts`. Severity refreshes and CLEARED signals push `ALERT_UPDATED` but write no audit event, because they are not state changes.
 - Backend STOMP at `/ws` (simple broker `/topic`, origins from `ecp.ws.allowed-origin-patterns`). The handshake is open, so topics carry change notices only. Approved for the alerts work; the shared edits were `backend/pom.xml` and `SecurityConfig`.
 - Alert endpoints: `GET /api/v1/alerts?status=ALL|ACTIVE|OPEN|ACKNOWLEDGED|RESOLVED&limit=`, `GET /api/v1/alerts/{id}` → `{alert, actions}`, `POST …/acknowledge`, `…/resolve {notes}`, `…/actions {actionType, notes}`. OPEN → ACKNOWLEDGED → RESOLVED (an OPEN alert may be resolved directly), wrong-state requests get 409, TECHNICIAN and ADMIN act, everyone signed in reads. `corrective_action` has `action_type` and `notes` (V6).

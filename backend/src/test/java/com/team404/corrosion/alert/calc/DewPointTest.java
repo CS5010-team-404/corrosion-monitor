@@ -21,6 +21,18 @@ class DewPointTest {
         assertEquals(-6.8, DewPoint.celsius(10, 30), REFERENCE_TOLERANCE_C);
     }
 
+    /**
+     * The four reference values the platform's PsychrometricsTest uses (platform/ecp-common), so the backend and the
+     * platform are checked against the same numbers.
+     */
+    @Test
+    void dewPointMatchesThePlatformReferenceValues() {
+        assertEquals(16.7, DewPoint.celsius(25, 60), REFERENCE_TOLERANCE_C);
+        assertEquals(9.3, DewPoint.celsius(20, 50), REFERENCE_TOLERANCE_C);
+        assertEquals(26.2, DewPoint.celsius(30, 80), REFERENCE_TOLERANCE_C);
+        assertEquals(-6.8, DewPoint.celsius(10, 30), REFERENCE_TOLERANCE_C);
+    }
+
     @Test
     void dewPointEqualsAirTemperatureAtFullHumidity() {
         double airTemperatureC = 20;
