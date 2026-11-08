@@ -118,7 +118,8 @@ class EquipmentStatusIntegrationTest {
         assertThat(s.get("timeOfWetnessMin24h").asDouble()).isZero();   // 50 % RH is not wet
         assertThat(s.get("trusted").asBoolean()).isTrue();
         assertThat(s.get("sensorId").asLong()).isEqualTo(sensorId);
-        assertThat(s.get("deviceId").asText()).isEqualTo("T-TRUSTED");
+        // sensor() makes the device id unique by adding a suffix, so only the start is fixed
+        assertThat(s.get("deviceId").asText()).startsWith("T-TRUSTED");
         assertThat(s.get("updatedAt").asText()).endsWith("Z");
         // the profile thresholds and the data added in V8 come from the database, not from Java
         assertThat(s.get("marginWarningC").asDouble()).isEqualTo(3.0);
@@ -220,7 +221,7 @@ class EquipmentStatusIntegrationTest {
         JsonNode s = statusOf(equipmentId);
 
         assertThat(s.get("sensorId").asLong()).isEqualTo(secondTrusted);
-        assertThat(s.get("deviceId").asText()).isEqualTo("T-SECOND");
+        assertThat(s.get("deviceId").asText()).startsWith("T-SECOND");
         assertThat(s.get("trusted").asBoolean()).isTrue();
         assertThat(s.get("riskLevel").asText()).isEqualTo("NORMAL");
     }
