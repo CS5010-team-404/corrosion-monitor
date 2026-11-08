@@ -24,11 +24,6 @@ const pending = (key: string, what: string, endpoint: string, owner: string): Pe
 export const PENDING = {
   equipmentStatus: pending("equipmentStatus", "Equipment status", "GET /api/v1/equipment/status", "Aayushee"),
   assessments: pending("assessments", "Equipment history", "GET /api/v1/equipment/{id}/assessments", "Aayushee"),
-  alerts: pending("alerts", "Alerts", "GET /api/v1/alerts", "Dumebi"),
-  alertDetail: pending("alertDetail", "Alert details", "GET /api/v1/alerts/{id}", "Dumebi"),
-  acknowledge: pending("acknowledge", "Acknowledging alerts", "POST /api/v1/alerts/{id}/acknowledge", "Dumebi"),
-  resolve: pending("resolve", "Resolving alerts", "POST /api/v1/alerts/{id}/resolve", "Dumebi"),
-  addAction: pending("addAction", "Logging corrective actions", "POST /api/v1/alerts/{id}/actions", "Dumebi"),
   reportSummary: pending("reportSummary", "The report summary", "GET /api/v1/reports/summary", "Aayushee with Dumebi"),
   reportCsv: pending("reportCsv", "The CSV report", "GET /api/v1/reports/summary.csv", "Aayushee with Dumebi"),
   reportPdf: pending("reportPdf", "The PDF report", "GET /api/v1/reports/summary.pdf", "Aayushee with Dumebi"),
@@ -57,11 +52,11 @@ export const scenarios = () => api<T.ScenarioOption[]>("/api/v1/admin/simulator/
 export const setScenario = (deviceId: string, scenario: string) => post(`/api/v1/admin/simulator/${encodeURIComponent(deviceId)}/scenario`, { scenario });
 
 // alerts (Dumebi)
-export const alerts = (status = "ALL", limit = 500) => api<T.Alert[]>(`/api/v1/alerts${q({ status, limit })}`, {}, PENDING.alerts);
-export const alertDetail = (id: number) => api<T.AlertDetail>(`/api/v1/alerts/${id}`, {}, PENDING.alertDetail);
-export const acknowledge = (id: number) => post<T.Alert>(`/api/v1/alerts/${id}/acknowledge`, undefined, PENDING.acknowledge);
-export const resolve = (id: number, notes?: string) => post<T.Alert>(`/api/v1/alerts/${id}/resolve`, { notes: notes ?? "" }, PENDING.resolve);
-export const addAction = (id: number, actionType: string, notes: string) => post<T.CorrectiveAction>(`/api/v1/alerts/${id}/actions`, { actionType, notes }, PENDING.addAction);
+export const alerts = (status = "ALL", limit = 500) => api<T.Alert[]>(`/api/v1/alerts${q({ status, limit })}`, {});
+export const alertDetail = (id: number) => api<T.AlertDetail>(`/api/v1/alerts/${id}`, {});
+export const acknowledge = (id: number) => post<T.Alert>(`/api/v1/alerts/${id}/acknowledge`);
+export const resolve = (id: number, notes?: string) => post<T.Alert>(`/api/v1/alerts/${id}/resolve`, { notes: notes ?? "" });
+export const addAction = (id: number, actionType: string, notes: string) => post<T.CorrectiveAction>(`/api/v1/alerts/${id}/actions`, { actionType, notes });
 
 // audit (Anela)
 export const auditLog = (params: { size?: number; page?: number; actor?: string; action?: string } = {}) => api<T.AuditEntry[]>(`/api/v1/audit${q({ size: 500, ...params })}`, {});
