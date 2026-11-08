@@ -22,7 +22,8 @@ corrosion-monitor/
 ├── backend/                      Team Spring Boot app (Java 17)
 │   ├── src/main/java/com/team404/corrosion/
 │   │   ├── auth/                 Sign-in: login, lockout, JWT issuing, roles, demo users
-│   │   ├── web/                  Shared REST error responses
+│   │   ├── alert/                Alert service: signal consumer, lifecycle API, escalation and email, live push
+│   │   ├── web/                  Shared REST error responses, security rules, WebSocket (STOMP at /ws)
 │   │   └── tools/                Runs the backend's Flyway migrations
 │   ├── src/main/resources/db/migration/   Flyway migrations (V<n>__description.sql)
 │   ├── src/test/                 Backend tests
@@ -94,21 +95,22 @@ No Java? `cd frontend && npm install && npm run dev:mock` runs the dashboard aga
 | `ECP_JWT_SECRET`               | Signs and verifies sign-in tokens (HS256). At least 32 bytes and identical on the backend and the platform. The backend will not start without it. |
 | `ECP_DEMO_PASSWORD`            | Password for the seeded demo users. If it is not set, no demo users are created.                                                                   |
 | `ECP_DEMO_SEED`                | Set to `false` to turn off demo-user seeding.                                                                                                      |
+| `ECP_ALERTS_*` (optional)      | Alert service settings, each with a default: `ECP_ALERTS_ESCALATE_AFTER` (`PT5M`), `ECP_ALERTS_QUIET_PERIOD` (`PT10M`), `ECP_ALERTS_POLL_INTERVAL` (`PT5S`), `ECP_ALERTS_ESCALATION_INTERVAL` (`PT30S`), `ECP_ALERTS_BATCH_SIZE` (`100`), `ECP_ALERTS_MAIL_FROM`, and `ECP_ALERTS_SCHEDULER_ENABLED` (`false` turns off the background jobs). |
 
 **Demo accounts.** On an empty `app_user` table the backend creates one user per role, all with the password from `ECP_DEMO_PASSWORD`: `tech@`, `operator@`, `manager@` and `admin@corrosionwatch.app` (Technician, Operator, Manager, Admin).
 
 ## Progress So Far
 
-| Functional Requirement (from Phase 1)                                            | Status  | Notes                                                                                                                                                                |
-|----------------------------------------------------------------------------------|---------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| FR1: Read temperature and humidity from multiple sensors at adjustable intervals | Partial | Simulated SHT31 sensors (10 scenarios), a Raspberry Pi client and a signed ingestion API are built. [TODO: confirm running end to end, and adjustable intervals]     |
-| FR2: Forecast condensation 15-60 minutes ahead                                   | Partial | ML forecaster trained and evaluated (`docs/ML_FORECAST.md`), with a forecast API in the platform. [TODO: confirm it feeds the dashboard and alerts]                  |
-| FR3: Warning and critical alerts, with escalation                                | [TODO]  | Sensor health writes alert signals; [TODO: alert service status, escalation, email]                                                                                  |
-| FR4: Acknowledge alerts and record corrective actions                            | Partial  | [TODO]                                                                                                                                                               |
-| FR5: Roles with enforced access levels                                           | Partial | Sign-in, BCrypt hashing, 5-failure lockout and role-bearing tokens (four roles) are done; the platform accepts the same token. [TODO: which endpoints enforce roles] |
-| FR6: Accurate audit log                                                          | Partial | Sign-in events and platform events are written to `audit_outbox`. [TODO: status of chaining into `audit_log`, and of verification]                                   |
-| FR7: Export reports (CSV/PDF)                                                    | [TODO]  | [TODO]                                                                                                                                                               |
-| FR8: Administrators configure equipment profiles and devices                     | [TODO]  | Device registry exists in the platform. [TODO: equipment profiles and admin screens]                                                                                 |
+| Functional Requirement (from Phase 1)                                            | Status  | Notes                                                                                                                                                                                                                                                                                                                          |
+|----------------------------------------------------------------------------------|---------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| FR1: Read temperature and humidity from multiple sensors at adjustable intervals | Partial | Simulated SHT31 sensors (10 scenarios), a Raspberry Pi client and a signed ingestion API are built. [TODO: confirm running end to end, and adjustable intervals]                                                                                                                                                               |
+| FR2: Forecast condensation 15-60 minutes ahead                                   | Partial | ML forecaster trained and evaluated (`docs/ML_FORECAST.md`), with a forecast API in the platform. [TODO: confirm it feeds the dashboard and alerts]                                                                                                                                                                            |
+| FR3: Warning and critical alerts, with escalation                                | Partial | Sensor health writes `alert_signals`; the alert service turns them into WARNING/CRITICAL alerts (one per dedup key), auto-resolves them after a 10-minute quiet period, escalates a CRITICAL alert nobody acknowledged within 5 minutes and emails the managers (MailHog locally). Changes are pushed live on `/topic/alerts`. |
+| FR4: Acknowledge alerts and record corrective actions                            | Done    | `POST /api/v1/alerts/{id}/acknowledge`, `/resolve` and `/actions` (OPEN → ACKNOWLEDGED → RESOLVED; wrong-state requests get 409). Technicians and admins act, everyone else signed in reads only. Corrective actions have a type and notes.                                                                                    |
+| FR5: Roles with enforced access levels                                           | Partial | Sign-in, BCrypt hashing, 5-failure lockout and role-bearing tokens (four roles) are done; the platform accepts the same token. [TODO: which endpoints enforce roles]                                                                                                                                                           |
+| FR6: Accurate audit log                                                          | Partial | Sign-in events and platform events are written to `audit_outbox`. [TODO: status of chaining into `audit_log`, and of verification]                                                                                                                                                                                             |
+| FR7: Export reports (CSV/PDF)                                                    | [TODO]  | [TODO]                                                                                                                                                                                                                                                                                                                         |
+| FR8: Administrators configure equipment profiles and devices                     | [TODO]  | Device registry exists in the platform. [TODO: equipment profiles and admin screens]                                                                                                                                                                                                                                           |
 
 The Phase 1 proposal lists three roles in FR5. The implementation has four (Technician, Operator, Manager, Admin), as agreed in `docs/DECISIONS.md`. Anything the dashboard needs that does not exist yet is tracked in `docs/GAPS.md`.
 
@@ -120,6 +122,16 @@ The Phase 1 proposal lists three roles in FR5. The implementation has four (Tech
 4. `GET /api/v1/auth/me` returns the signed-in user's email, name and role.
 5. Five wrong passwords in a row lock the account for 15 minutes. While locked, every attempt is refused, even with the right password. An unknown email and a wrong password give the same error message.
 6. Each sign-in success, failure and lockout is written to `audit_outbox`, with no passwords or tokens in the details.
+
+**Working end to end:** Alerts, from signal to acknowledgement:
+
+1. A producer (today, the platform's sensor health service) writes a RAISED or CLEARED row to `alert_signals`.
+2. Every 5 seconds the alert service reads unprocessed signals in id order and marks each processed in the same transaction, so a crash never loses or repeats one. A signal that can never succeed is logged and skipped, so it cannot block the queue.
+3. A RAISED signal opens an alert, or refreshes the unresolved alert with the same dedup key, so repeated signals never add rows. A CLEARED signal records when the condition cleared. The alert resolves itself once the condition has stayed clear for 10 minutes, so a sensor that flaps keeps one alert.
+4. A technician or admin acknowledges the alert, logs corrective actions and resolves it through `/api/v1/alerts`.
+5. Every 30 seconds the service escalates any CRITICAL alert still OPEN 5 minutes after it became critical. It raises the alert to escalation level 1, once, and emails every manager.
+6. Every state change (opened, acknowledged, resolved, escalated, action logged) writes an `ALERT_*` or `CORRECTIVE_ACTION_LOGGED` event to `audit_outbox` in the same transaction. After the commit, a `{alertId, action}` notice goes to `/topic/alerts` so open dashboards refetch.
+
    [TODO: confirm and describe the sensor-to-dashboard path on the current `dev` branch, step by step: a simulated sensor sends a signed reading, the ingestion API validates and stores it, and what appears on the dashboard.]
 
 ## Testing So Far
@@ -132,8 +144,7 @@ The Phase 1 proposal lists three roles in FR5. The implementation has four (Tech
 
 ## Next Steps (Phase 3)
 
-- Alert service: escalation of unacknowledged alerts and email notifications
-- Acknowledging alerts and logging corrective actions
+- Alert service: consume the analytics condensation risk and forecast signals, consider more escalation levels, and set up real email delivery for the deployed service
 - Chain `audit_outbox` into the tamper-evident `audit_log` and add the Admin verification screen
 - Role enforcement on every endpoint, and administrator screens for users, devices and equipment profiles
 - CSV and PDF report exports
@@ -147,12 +158,12 @@ The Phase 1 proposal lists three roles in FR5. The implementation has four (Tech
 |------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Aayushee Bhat    | [TODO: features, classes or files built; tests written]                                                                                                                                                                                       |
 | Anela Quiroz     | [TODO: features, classes or files built; tests written]                                                                                                                                                                                       |
-| Dumebi Onyebuchi | Created the repository and its layout: the Maven project with backend and simulator modules, the Spring Boot skeleton, the Docker Compose setup, .env.example, and CI that runs on dev and main. Wrote CONTRIBUTING.md with the branch model. |
+| Dumebi Onyebuchi | Created the repository and its layout: the Maven project with backend and simulator modules, the Spring Boot skeleton, the Docker Compose setup, .env.example, and CI that runs on dev and main. Wrote CONTRIBUTING.md with the branch model. Built the alert service (`backend/.../alert/`): the `alert_signals` consumer with deduplication and quiet-period auto-resolve (`SignalConsumer`, `SignalProcessor`, `JdbcAlertStore`), the alert lifecycle and its REST API (`AlertStatus`, `AlertService`, `AlertRepository`, `AlertController`), escalation with manager email (`EscalationJob`, `MailManagerNotifier`), audit events and the live push on `/topic/alerts` (`OutboxAlertEvents`, `StompAlertBroadcaster`, STOMP at `/ws`), switchable background jobs (`AlertScheduler`)|
 | Joshua Dominick  | Data platform (`platform/`: ingestion, sensor health, simulator, forecaster, shared code), React frontend, deployment files, Raspberry Pi client, sign-in in `backend/` (`auth` package), Flyway migrations. [TODO: tests written]            |
 
 ## Notes
 
 - Work happens on `feature/<name>-<topic>` branches merged into `dev` by pull request; `main` is updated only by the weekly release. See `CONTRIBUTING.md`.
 - This project is designed in alignment with selected NIST SP 800-53 controls and the NIST CPS Framework. It is not certified or compliant. See `docs/` for the control mapping.
-- Results from the simulator are labeled as simulated everywhere they appear.
+- Results from the simulator are labelled as simulated everywhere they appear.
 - Never commit passwords, sensor secrets, or `.env` files.
