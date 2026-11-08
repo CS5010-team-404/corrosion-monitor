@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { PENDING, alerts, equipmentStatus, sensorsHealth, users } from "../api/endpoints";
+import { PENDING, alerts, equipmentStatus, profiles, sensorsHealth, users } from "../api/endpoints";
 import { ApiError, NotBuiltError, isSample } from "../lib/api";
 import { config } from "../lib/config";
 import { ErrorState } from "../components/ui";
@@ -45,9 +45,18 @@ describe("endpoints that aren't built yet", () => {
   it("with VITE_MOCK_FALLBACK answers a not-built endpoint from the mock and marks the data as sample", async () => {
     config.mockFallback = true;
     fetchMock.mockResolvedValue(respond(404));
-    const list = await alerts("ALL", 10);
+    const list = await profiles();
     expect(Array.isArray(list)).toBe(true);
     expect(isSample(list)).toBe(true);
+  });
+
+  it("treats the alert endpoints as built: a 404 is a real error, never sample data", async () => {
+    config.mockFallback = true;
+    fetchMock.mockResolvedValue(respond(404, { message: "Alert 99 not found." }));
+    const err = await alerts("ALL", 10).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).not.toBeInstanceOf(NotBuiltError);
+    expect(err.message).toBe("Alert 99 not found.");
   });
 
   it("keeps real data unmarked", async () => {

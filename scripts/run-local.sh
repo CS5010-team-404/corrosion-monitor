@@ -116,7 +116,8 @@ if [ ! -d frontend/node_modules ]; then
   (cd frontend && npm install --silent)
 fi
 echo "Starting the frontend on :5173 (log: .run/frontend.log)..."
-(cd frontend && exec nohup npm run dev -- --strictPort < /dev/null > "$RUN/frontend.log" 2>&1) &
+# VITE_BACKEND_LIVE: the backend has /ws (alerts), so the UI subscribes to /topic/alerts and /topic/risk too.
+(cd frontend && VITE_BACKEND_LIVE=true exec nohup npm run dev -- --strictPort < /dev/null > "$RUN/frontend.log" 2>&1) &
 echo $! > "$RUN/frontend.pid"
 for _ in $(seq 1 30); do
   curl -fsS -o /dev/null http://localhost:5173/ 2>/dev/null && break
@@ -141,10 +142,10 @@ Corrosion Watch is running locally.
 
   Works now (backend + platform):
     Sign-in, Sensor health, Admin > simulator and devices, sensor forecasts,
+    Alerts (list, detail, acknowledge, corrective actions, resolve; live on /topic/alerts) and the bell,
     Audit log (managers and admins; Verify chain is admin-only).
   Waiting for teammates' endpoints (these show an error state until they exist; docs/GAPS.md):
-    Overview, Equipment       equipment status and assessments   (Aayushee); alerts (Dumebi)
-    Alerts                    alert list, detail and actions     (Dumebi)
+    Overview, Equipment       equipment status and assessments   (Aayushee)
     Reports                   report summary, CSV and PDF        (Aayushee with Dumebi)
     Admin > users, profiles   /api/v1/admin/users, /api/v1/profiles (team)
 

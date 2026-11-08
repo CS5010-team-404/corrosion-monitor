@@ -6,3 +6,6 @@
 2 -1064722155 V2__agreed_changes.sql
 3 523928711 V3__demo_reference_data.sql
 4 1083147086 V4__audit_chain.sql
+5 1126877196 V5__alert_lifecycle_columns.sql
+6 -2105176708 V6__corrective_action_type.sql
+7 -689730258 V7__alert_device_and_critical_since.sql
