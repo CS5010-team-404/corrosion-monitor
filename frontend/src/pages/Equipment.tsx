@@ -30,8 +30,9 @@ export function Equipment({ id }: { id: number }) {
   if (st.error) return <ErrorState error={st.error} onRetry={st.reload} />;
   if (!e) return <ErrorState error={new Error(`Equipment ${id} was not found.`)} onRetry={() => navigate("/")} />;
 
-  const f = fc.data;
-  const m60 = f?.margin60C ?? e.forecastMargin60C;
+  // A forecast from an untrusted sensor is not shown, like its current figures.
+  const f = e.trusted ? fc.data : null;
+  const m60 = e.trusted ? (f?.margin60C ?? e.forecastMargin60C) : null;
   const series = (pts.data ?? []).map((p) => ({ t: Date.parse(p.measuredAt), ...p }));
   const last = series[series.length - 1];
   const chart = series.length ? [
@@ -51,6 +52,9 @@ export function Equipment({ id }: { id: number }) {
     saveBlob(new Blob([rows.join("\n")], { type: "text/csv" }), `${e.equipmentName.replace(/\W+/g, "-").toLowerCase()}-readings.csv`);
     toast("Readings downloaded");
   };
+  // "–" on its own when a value is missing, never "–°C".
+  const deg = (v: number | null) => (v == null ? "–" : <>{fmt(v)}<small>°C</small></>);
+  const withUnit = (v: number | null, unit: string) => (v == null ? "–" : `${fmt(v)}${unit}`);
   const tile = (icon: string, val: React.ReactNode, name: string, sub: string, on?: boolean) => (
     <div className="tile" style={{ cursor: "default" }}><div className="top"><div className="val num">{val}</div><span className={`tog ${on ? "on" : ""}`}><Icon name={icon} /></span></div><div><div className="name">{name}</div><div className="sub">{sub}</div></div></div>
   );
@@ -79,10 +83,10 @@ export function Equipment({ id }: { id: number }) {
       <div className="section" style={{ marginTop: 28 }}>
         <div className="sec-head"><h2>Readings</h2><span className="small muted">Updated {ago(e.updatedAt)}</span></div>
         <div className="tiles">
-          {tile("thermo", <>{fmt(e.temperatureC)}<small>°C</small></>, "Air temperature", `Allowed ${e.tempMinC} to ${e.tempMaxC} °C`)}
-          {tile("wind", <>{fmt(e.dewPointC)}<small>°C</small></>, "Dew point", "Condensation forms below this")}
-          {tile("layers", <>{fmt(e.surfaceTempC)}<small>°C</small></>, "Surface", `Air minus ${e.surfaceOffsetC} °C cold-spot offset`)}
-          {tile("clock", m60 != null ? <>{fmt(m60)}<small>°C</small></> : "–", "Margin in 60 min", f ? `${f.method === "model" ? "ML forecast" : "Trend"}${f.warn60 ? ", early warning on" : ""}` : "Forecast pending", m60 != null && marginTone(m60, e.marginWarningC, e.marginCriticalC) !== "ok")}
+          {tile("thermo", deg(e.temperatureC), "Air temperature", `Allowed ${e.tempMinC} to ${e.tempMaxC} °C`)}
+          {tile("wind", deg(e.dewPointC), "Dew point", "Condensation forms below this")}
+          {tile("layers", deg(e.surfaceTempC), "Surface", `Air minus ${e.surfaceOffsetC} °C cold-spot offset`)}
+          {tile("clock", deg(m60), "Margin in 60 min", f ? `${f.method === "model" ? "ML forecast" : "Trend"}${f.warn60 ? ", early warning on" : ""}` : "Forecast pending", m60 != null && marginTone(m60, e.marginWarningC, e.marginCriticalC) !== "ok")}
         </div>
       </div>
 
@@ -98,9 +102,9 @@ export function Equipment({ id }: { id: number }) {
       <div className="section cols">
         <div className="card"><div className="card-head"><h2>Risk breakdown</h2><span className="badge muted num">Index {e.riskIndex ?? "–"}</span></div>
           <dl className="kv">
-            <dt>Margin</dt><dd className="num">{fmt(e.marginC)} °C (warning {e.marginWarningC} °C)</dd>
-            <dt>Humidity</dt><dd className="num">{fmt(e.humidityPct)}% (critical {e.rhCriticalPct}%)</dd>
-            <dt>Time of wetness</dt><dd className="num">{e.timeOfWetnessMin24h ?? "–"} min above 80% RH</dd>
+            <dt>Margin</dt><dd className="num">{withUnit(e.marginC, " °C")} (warning {e.marginWarningC} °C)</dd>
+            <dt>Humidity</dt><dd className="num">{withUnit(e.humidityPct, "%")} (critical {e.rhCriticalPct}%)</dd>
+            <dt>Time of wetness</dt><dd className="num">{e.timeOfWetnessMin24h == null ? "–" : `${e.timeOfWetnessMin24h} min above 80% RH`}</dd>
             <dt>Early warning</dt><dd className="num">{f ? `${Math.round(f.risk30 * 100)}% within 30 min, ${Math.round(f.risk60 * 100)}% within 60` : "–"}</dd>
           </dl></div>
         <div className="card"><div className="card-head"><h2>Sensor and alerts</h2>{e.trusted ? <Badge value="HEALTHY" text="Trusted" /> : <Badge value="FAULTY" text="Not trusted" />}</div>
