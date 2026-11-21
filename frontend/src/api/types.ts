@@ -50,6 +50,9 @@ export interface AlertDetail { alert: Alert; actions: CorrectiveAction[]; }
 export interface AuditEntry { id: number; occurredAt: string; actorType: string; actor: string; action: string; entityType: string | null; entityId: string | null; details?: string | null;
   /** Not returned by GET /api/v1/audit yet (docs/GAPS.md); the page shows "–" until they are. */
   prevHash?: string | null; hash?: string | null; }
+/** GET /api/v1/audit as agreed with audit: one page of entries, newest first. page starts at 0. */
+export interface AuditPage { items: AuditEntry[]; page: number; size: number; total: number; }
+
 export interface ChainVerification { intact: boolean; checked: number; firstBrokenId: number | null; message?: string; }
 
 export interface ReportSummary {

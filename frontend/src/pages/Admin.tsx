@@ -114,14 +114,14 @@ function ProfilesTab() {
 
 function UsersTab() {
   const u = useAsync(users, []);
-  const toast = useToast();
   if (u.loading) return <PageSkeleton table />;
   if (u.error) return <ErrorState error={u.error} onRetry={u.reload} />;
   return (
     <div className="card flush"><div className="table-wrap"><table className="dt"><thead><tr><th>User</th><th style={{ width: 220 }}>Role</th><th>Last sign-in</th><th>Status</th></tr></thead><tbody>
       {(u.data ?? []).map((x) => (
         <tr key={x.id}><td><div className="row" style={{ gap: 12, flexWrap: "nowrap" }}><span className="avatar sm">{x.fullName[0]}</span><div><div className="cell-main">{x.fullName}</div><div className="cell-sub">{x.username}</div></div></div></td>
-          <td><Dropdown block value={x.role} onChange={() => toast("Role changes are saved by the team backend (admin API)")} options={["TECHNICIAN", "OPERATOR", "MANAGER", "ADMIN"].map((r) => ({ value: r, label: label(r) }))} /></td>
+          {/* Read-only until the team backend has a role-change API (J4); a dropdown that saves nothing would mislead. */}
+          <td>{label(x.role)}</td>
           <td className="num small">{ago(x.lastLoginAt)}</td><td>{x.lockedUntil ? <Badge value="CRITICAL" text="Locked" /> : x.enabled ? <Badge value="HEALTHY" text="Active" /> : <Badge text="Disabled" />}</td></tr>
       ))}
     </tbody></table></div></div>
