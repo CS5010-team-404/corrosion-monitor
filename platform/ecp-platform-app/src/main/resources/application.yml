@@ -63,3 +63,7 @@ ecp:
     recovery-evaluations: 3
     service-stale-after: PT2M
     startup-grace: ${ECP_HEALTH_STARTUP_GRACE:PT3M}   # no OFFLINE this soon after a platform restart
+  forecast:
+    publish:
+      enabled: ${ECP_FORECAST_PUBLISH_ENABLED:true}  # latest forecast per trusted sensor -> sensor_forecasts
+      every: PT1M
