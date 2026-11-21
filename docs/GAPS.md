@@ -15,7 +15,7 @@ Owners: Aayushee (analytics), Dumebi (alerts), Anela (audit), Joshua (platform/f
 
 ### Aayushee: analytics
 - Missing: `GET /api/v1/equipment/{id}/assessments?minutes=` → `AssessmentPoint[]` (next analytics PR). Owner: Aayushee
-- Missing: the 15, 30 and 60 minute margins and `predictedCondensationAt` in `GET /api/v1/equipment/status` (they are null for now); fill them from the platform forecaster (`ecp-forecast`) in a later PR. Owner: Aayushee
+- Missing: the 15, 30 and 60 minute margins and `predictedCondensationAt` in `GET /api/v1/equipment/status` (they are null for now). The platform now publishes them every minute per trusted sensor in the shared table `sensor_forecasts` (CONTRACTS.md), so analytics can read them with one join instead of running the model. Owner: Aayushee
 - Confirm or replace the demo profile thresholds and risk_budget in V3, and the demo kind, temperature range and cold-spot offset added in V8, with cited values. Owner: Aayushee
 - Missing: a `risk_assessments` table (ARCHITECTURE.md); the schema has `risk_state` and `forecast`, both keyed by location rather than equipment. The status endpoint now computes the risk index on each request from the last 24 hours of readings. Owner: Aayushee
 - Missing: producing `alert_signals` (`ANALYTICS:CONDENSATION_RISK:<id>`, `ANALYTICS:CONDENSATION_FORECAST:<id>`) (a later PR, after the assessments endpoint and the forecast). Owner: Aayushee
@@ -29,7 +29,7 @@ Owners: Aayushee (analytics), Dumebi (alerts), Anela (audit), Joshua (platform/f
 - Mismatch: the UI asks for `size=500`, the backend caps a page at 200, so the page shows the newest 200 entries. Owner: Anela + Joshua
 
 ### Joshua: platform
-- Duplicate: team `forecast` table vs platform forecast API (`/api/v1/sensors/{id}/forecast`); decide which analytics uses. Owner: Joshua + Aayushee
+- Duplicate: team `forecast` table (keyed by location) vs the platform's `sensor_forecasts` table (per sensor, published every minute) and forecast API (`/api/v1/sensors/{id}/forecast`); decide which analytics uses and whether the team table is dropped. Owner: Joshua + Aayushee
 - Duplicate: team `simulator/` module vs `platform/ecp-simulator` (different signing scheme). Owner: Joshua + team
 
 ### No action
