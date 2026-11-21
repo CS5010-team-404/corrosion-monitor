@@ -1,0 +1,37 @@
+[
+  {
+    "created_at" : "2026-11-20T12:00:00Z",
+    "dedup_key" : "HEALTH:SENSOR_OFFLINE:10",
+    "equipment_id" : 10,
+    "message" : "SIM-010: No readings received for 2 min 0 s.",
+    "payload" : {
+      "deviceId" : "SIM-010",
+      "issue" : "OFFLINE",
+      "neverReported" : false,
+      "offlineAfterSeconds" : 90,
+      "silentSeconds" : 120
+    },
+    "sensor_id" : 10,
+    "severity" : "CRITICAL",
+    "signal_type" : "SENSOR_OFFLINE",
+    "source" : "SENSOR_HEALTH",
+    "state" : "RAISED",
+    "title" : "Sensor offline: SIM-010"
+  },
+  {
+    "created_at" : "2026-11-20T12:05:00Z",
+    "dedup_key" : "HEALTH:SENSOR_OFFLINE:10",
+    "equipment_id" : 10,
+    "message" : "SIM-010 recovered.",
+    "payload" : {
+      "deviceId" : "SIM-010",
+      "issue" : "OFFLINE"
+    },
+    "sensor_id" : 10,
+    "severity" : "CRITICAL",
+    "signal_type" : "SENSOR_OFFLINE",
+    "source" : "SENSOR_HEALTH",
+    "state" : "CLEARED",
+    "title" : "Sensor offline: SIM-010"
+  }
+]
