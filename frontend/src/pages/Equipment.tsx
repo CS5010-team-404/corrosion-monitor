@@ -5,7 +5,7 @@ import { Menu } from "../components/Dropdown";
 import { Icon } from "../components/Icon";
 import { Badge, ErrorState, PageSkeleton, Segmented, Skeleton } from "../components/ui";
 import { LineChart, MarginRail } from "../components/viz";
-import { saveBlob } from "../lib/api";
+import { isNotBuilt, saveBlob } from "../lib/api";
 import { config } from "../lib/config";
 import { ago, clamp, dShort, fmt, label, marginTone } from "../lib/format";
 import { useLive } from "../lib/live";
@@ -30,8 +30,9 @@ export function Equipment({ id }: { id: number }) {
   if (st.error) return <ErrorState error={st.error} onRetry={st.reload} />;
   if (!e) return <ErrorState error={new Error(`Equipment ${id} was not found.`)} onRetry={() => navigate("/")} />;
 
-  const f = fc.data;
-  const m60 = f?.margin60C ?? e.forecastMargin60C;
+  // A forecast from an untrusted sensor is not shown, like its current figures.
+  const f = e.trusted ? fc.data : null;
+  const m60 = e.trusted ? (f?.margin60C ?? e.forecastMargin60C) : null;
   const series = (pts.data ?? []).map((p) => ({ t: Date.parse(p.measuredAt), ...p }));
   const last = series[series.length - 1];
   const chart = series.length ? [
@@ -43,12 +44,17 @@ export function Equipment({ id }: { id: number }) {
       { points: [[last.t, last.dewPointC], [last.t + 60 * 60000, last.dewPointC]] as [number, number][], color: "var(--dew)", dash: "5 5" },
     ] : []),
   ] : [];
+  // GET /api/v1/equipment/{id}/assessments isn't built yet: the chart says so, the rest of the page uses real data.
+  const historyMissing = isNotBuilt(pts.error);
   const myAlerts = (al.data ?? []).filter((a) => a.equipmentId === id).slice(0, 4);
   const exportCsv = () => {
     const rows = ["measured_at,temperature_c,humidity_pct,surface_temp_c,dew_point_c,margin_c", ...(pts.data ?? []).map((p) => [p.measuredAt, p.temperatureC, p.humidityPct, p.surfaceTempC, p.dewPointC, p.marginC].map((v) => (typeof v === "number" ? v.toFixed(2) : v)).join(","))];
     saveBlob(new Blob([rows.join("\n")], { type: "text/csv" }), `${e.equipmentName.replace(/\W+/g, "-").toLowerCase()}-readings.csv`);
     toast("Readings downloaded");
   };
+  // "–" on its own when a value is missing, never "–°C".
+  const deg = (v: number | null) => (v == null ? "–" : <>{fmt(v)}<small>°C</small></>);
+  const withUnit = (v: number | null, unit: string) => (v == null ? "–" : `${fmt(v)}${unit}`);
   const tile = (icon: string, val: React.ReactNode, name: string, sub: string, on?: boolean) => (
     <div className="tile" style={{ cursor: "default" }}><div className="top"><div className="val num">{val}</div><span className={`tog ${on ? "on" : ""}`}><Icon name={icon} /></span></div><div><div className="name">{name}</div><div className="sub">{sub}</div></div></div>
   );
@@ -62,7 +68,7 @@ export function Equipment({ id }: { id: number }) {
           <span className="ttl">{e.equipmentName}</span>
           <Menu width={230} trigger={(toggle) => <button className="circle-btn" onClick={toggle} aria-label="More actions"><Icon name="more" /></button>}>
             {(close) => <>
-              <button className="opt" onClick={() => { close(); exportCsv(); }}><span className="ck"><Icon name="download" /></span>Export readings (CSV)</button>
+              {!historyMissing && <button className="opt" onClick={() => { close(); exportCsv(); }}><span className="ck"><Icon name="download" /></span>Export readings (CSV)</button>}
               {e.sensorId && <button className="opt" onClick={() => { close(); navigate(`/health?sensor=${e.sensorId}`); }}><span className="ck"><Icon name="wifi" /></span>Open sensor {e.deviceId}</button>}
               <button className="opt" onClick={() => { close(); navigate(`/alerts?q=${encodeURIComponent(e.equipmentName)}`); }}><span className="ck"><Icon name="bell" /></span>View alerts</button>
             </>}
@@ -77,10 +83,10 @@ export function Equipment({ id }: { id: number }) {
       <div className="section" style={{ marginTop: 28 }}>
         <div className="sec-head"><h2>Readings</h2><span className="small muted">Updated {ago(e.updatedAt)}</span></div>
         <div className="tiles">
-          {tile("thermo", <>{fmt(e.temperatureC)}<small>°C</small></>, "Air temperature", `Allowed ${e.tempMinC} to ${e.tempMaxC} °C`)}
-          {tile("wind", <>{fmt(e.dewPointC)}<small>°C</small></>, "Dew point", "Condensation forms below this")}
-          {tile("layers", <>{fmt(e.surfaceTempC)}<small>°C</small></>, "Surface", `Air minus ${e.surfaceOffsetC} °C cold-spot offset`)}
-          {tile("clock", m60 != null ? <>{fmt(m60)}<small>°C</small></> : "–", "Margin in 60 min", f ? `${f.method === "model" ? "ML forecast" : "Trend"}${f.warn60 ? ", early warning on" : ""}` : "Forecast pending", m60 != null && marginTone(m60, e.marginWarningC, e.marginCriticalC) !== "ok")}
+          {tile("thermo", deg(e.temperatureC), "Air temperature", `Allowed ${e.tempMinC} to ${e.tempMaxC} °C`)}
+          {tile("wind", deg(e.dewPointC), "Dew point", "Condensation forms below this")}
+          {tile("layers", deg(e.surfaceTempC), "Surface", `Air minus ${e.surfaceOffsetC} °C cold-spot offset`)}
+          {tile("clock", deg(m60), "Margin in 60 min", f ? `${f.method === "model" ? "ML forecast" : "Trend"}${f.warn60 ? ", early warning on" : ""}` : "Forecast pending", m60 != null && marginTone(m60, e.marginWarningC, e.marginCriticalC) !== "ok")}
         </div>
       </div>
 
@@ -88,16 +94,17 @@ export function Equipment({ id }: { id: number }) {
         <div className="card-head"><div><h2>Temperature and forecast</h2><p className="small muted" style={{ margin: "4px 0 0" }}>Dashed lines after now are the 60-minute forecast{f ? ` (${f.modelVersion})` : ""}</p></div>
           <Segmented label="Range" value={range} onChange={setRange} items={[{ key: 60, label: "1 h" }, { key: 120, label: "2 h" }, { key: 240, label: "4 h" }]} /></div>
         <MarginRail large dew={e.dewPointC} surface={e.surfaceTempC} warn={e.marginWarningC} crit={e.marginCriticalC} untrusted={!e.trusted} />
-        {pts.loading ? <Skeleton h={250} /> : <LineChart series={chart} unit="°" now={last?.t} label="Air, surface and dew point temperature with forecast" />}
+        {historyMissing ? <div className="empty" role="status"><div className="circ"><Icon name="clock" /></div><b>Not built yet</b>{(pts.error as Error).message}</div>
+          : pts.loading ? <Skeleton h={250} /> : <LineChart series={chart} unit="°" now={last?.t} label="Air, surface and dew point temperature with forecast" />}
         <div className="legend"><span><i style={{ background: "var(--surf)" }} />Surface</span><span><i style={{ background: "var(--dew)" }} />Dew point</span><span><i style={{ background: "var(--line-2)" }} />Air</span></div>
       </div></div>
 
       <div className="section cols">
         <div className="card"><div className="card-head"><h2>Risk breakdown</h2><span className="badge muted num">Index {e.riskIndex ?? "–"}</span></div>
           <dl className="kv">
-            <dt>Margin</dt><dd className="num">{fmt(e.marginC)} °C (warning {e.marginWarningC} °C)</dd>
-            <dt>Humidity</dt><dd className="num">{fmt(e.humidityPct)}% (critical {e.rhCriticalPct}%)</dd>
-            <dt>Time of wetness</dt><dd className="num">{e.timeOfWetnessMin24h ?? "–"} min above 80% RH</dd>
+            <dt>Margin</dt><dd className="num">{withUnit(e.marginC, " °C")} (warning {e.marginWarningC} °C)</dd>
+            <dt>Humidity</dt><dd className="num">{withUnit(e.humidityPct, "%")} (critical {e.rhCriticalPct}%)</dd>
+            <dt>Time of wetness</dt><dd className="num">{e.timeOfWetnessMin24h == null ? "–" : `${e.timeOfWetnessMin24h} min above 80% RH`}</dd>
             <dt>Early warning</dt><dd className="num">{f ? `${Math.round(f.risk30 * 100)}% within 30 min, ${Math.round(f.risk60 * 100)}% within 60` : "–"}</dd>
           </dl></div>
         <div className="card"><div className="card-head"><h2>Sensor and alerts</h2>{e.trusted ? <Badge value="HEALTHY" text="Trusted" /> : <Badge value="FAULTY" text="Not trusted" />}</div>
