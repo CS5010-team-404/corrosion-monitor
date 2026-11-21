@@ -1,4 +1,4 @@
-import { api, post, type Pending } from "../lib/api";
+import { api, patch, post, type Pending } from "../lib/api";
 import type * as T from "./types";
 
 // Every call the UI makes, in one file. Team backend paths are on the left of the split in docs/CONTRACTS.md;
@@ -47,6 +47,8 @@ export const services = () => api<T.ServiceStatus[]>("/api/v1/health/services");
 export const devices = () => api<T.Device[]>("/api/v1/sensors");
 export const registerDevice = (body: { deviceId: string; equipmentId: number; equipmentName: string; locationName: string; kind: string }) =>
   post<{ deviceId: string; secret: string }>("/api/v1/admin/sensors", body);
+export const setSensorInterval = (sensorId: number, expectedIntervalS: number) =>
+  patch<T.Device>(`/api/v1/admin/sensors/${sensorId}`, { expectedIntervalS });
 export const simulator = () => api<T.SimulatorDevice[]>("/api/v1/admin/simulator");
 export const scenarios = () => api<T.ScenarioOption[]>("/api/v1/admin/simulator/scenarios");
 export const setScenario = (deviceId: string, scenario: string) => post(`/api/v1/admin/simulator/${encodeURIComponent(deviceId)}/scenario`, { scenario });

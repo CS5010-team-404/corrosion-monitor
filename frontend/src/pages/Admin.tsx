@@ -1,9 +1,12 @@
 import { useState } from "react";
-import { devices, equipmentStatus, profiles, registerDevice, scenarios, setScenario, simulator, users } from "../api/endpoints";
+import { devices, equipmentStatus, profiles, registerDevice, scenarios, setScenario, setSensorInterval, simulator, users } from "../api/endpoints";
+import type * as T from "../api/types";
 import { Dropdown } from "../components/Dropdown";
 import { Icon } from "../components/Icon";
-import { Badge, Button, ErrorState, Modal, PageHead, PageSkeleton, Tabs } from "../components/ui";
+import { Badge, Button, Empty, ErrorState, Modal, PageHead, PageSkeleton, Tabs } from "../components/ui";
+import { errorMessage } from "../lib/api";
 import { ago, label } from "../lib/format";
+import { INTERVAL_MAX_S, INTERVAL_MIN_S, intervalLabel, intervalProblem } from "../lib/sensors";
 import { useRouter } from "../lib/router";
 import { useToast } from "../lib/toast";
 import { useAsync } from "../lib/useAsync";
@@ -67,6 +70,7 @@ function SensorsTab() {
   const [kind, setKind] = useState("PHYSICAL");
   const [busy, setBusy] = useState(false);
   const [secret, setSecret] = useState<string | null>(null);
+  const [editing, setEditing] = useState<T.Device | null>(null);
   const close = () => { setOpen(false); setSecret(null); };
   const submit = async () => {
     const e = eq.data?.find((x) => String(x.equipmentId) === eqId);
@@ -77,13 +81,19 @@ function SensorsTab() {
     } catch (err) { toast((err as Error).message, true); } finally { setBusy(false); }
   };
   if (dev.loading) return <PageSkeleton table />;
+  if (dev.error) return <ErrorState error={dev.error} onRetry={dev.reload} />;
+  const list = dev.data ?? [];
   return (
     <>
-      <div className="row between" style={{ marginBottom: 16 }}><span className="muted">{(dev.data ?? []).length} registered devices</span><Button variant="primary" onClick={() => setOpen(true)}><Icon name="plus" />Register device</Button></div>
-      <div className="card flush"><div className="table-wrap"><table className="dt"><thead><tr><th>Device</th><th>Kind</th><th>Equipment</th><th className="r">Interval</th><th>Health</th></tr></thead><tbody>
-        {(dev.data ?? []).map((d) => { const h = hl.data?.find((x) => x.deviceId === d.deviceId); return (
-          <tr key={d.id}><td className="cell-main">{d.deviceId}</td><td>{label(d.kind)} {d.model}</td><td>{d.equipmentName}</td><td className="r num">{d.expectedIntervalS} s</td><td>{h ? <Badge value={h.status} /> : "–"}</td></tr>); })}
-      </tbody></table></div></div>
+      <div className="row between" style={{ marginBottom: 16 }}><span className="muted">{list.length} registered devices</span><Button variant="primary" onClick={() => setOpen(true)}><Icon name="plus" />Register device</Button></div>
+      {list.length === 0 ? <div className="card"><Empty icon="wifi" title="No devices yet" text="Register a Raspberry Pi or a simulated sensor to start receiving readings." /></div> :
+      <div className="card flush"><div className="table-wrap"><table className="dt"><thead><tr><th>Device</th><th>Kind</th><th>Equipment</th><th className="r">Reporting interval</th><th>Health</th></tr></thead><tbody>
+        {list.map((d) => { const h = hl.data?.find((x) => x.deviceId === d.deviceId); return (
+          <tr key={d.id}><td className="cell-main">{d.deviceId}</td><td>{label(d.kind)} {d.model}</td><td>{d.equipmentName}</td>
+            <td className="r"><Button size="sm" variant="ghost" aria-label={`Change reporting interval of ${d.deviceId}, now ${intervalLabel(d.expectedIntervalS)}`} onClick={() => setEditing(d)}><span className="num">{intervalLabel(d.expectedIntervalS)}</span><Icon name="clock" /></Button></td>
+            <td>{h ? <Badge value={h.status} /> : "–"}</td></tr>); })}
+      </tbody></table></div></div>}
+      {editing && <IntervalDialog device={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); dev.reload(); }} />}
       {open && (
         <Modal title="Register a device" sub="The device key is shown once. Store it on the device." onClose={close}
           footer={secret ? <Button variant="primary" onClick={close}>Done</Button> : <><Button variant="ghost" onClick={close}>Cancel</Button><Button variant="primary" busy={busy} onClick={submit}>Register device</Button></>}>
@@ -95,6 +105,37 @@ function SensorsTab() {
         </Modal>
       )}
     </>
+  );
+}
+
+/** Administration > Sensors: change how often one device reports (PATCH /api/v1/admin/sensors/{id}, admins only). */
+export function IntervalDialog({ device, onClose, onSaved }: { device: T.Device; onClose: () => void; onSaved: (d: T.Device) => void }) {
+  const toast = useToast();
+  const [value, setValue] = useState(String(device.expectedIntervalS));
+  const [busy, setBusy] = useState(false);
+  const problem = intervalProblem(value);
+  const unchanged = !problem && Number(value) === device.expectedIntervalS;
+  const save = async () => {
+    if (problem || unchanged || busy) return;
+    setBusy(true);
+    try {
+      const d = await setSensorInterval(device.id, Number(value));
+      toast(`${device.deviceId} now reports every ${intervalLabel(d.expectedIntervalS)}`);
+      onSaved(d);
+    } catch (err) { toast(errorMessage(err), true); } finally { setBusy(false); }
+  };
+  const hint = device.kind === "SIMULATED" ? "The simulator switches to it straight away."
+    : "Set the device to the same interval, or sensor health will show it as late.";
+  return (
+    <Modal title={`Reporting interval: ${device.deviceId}`} sub="How often this sensor sends a reading. Sensor health judges late and offline against it." onClose={onClose}
+      footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button variant="primary" busy={busy} disabled={!!problem || unchanged} onClick={save}>Save interval</Button></>}>
+      <label className="field">Interval in seconds
+        <input type="number" inputMode="numeric" min={INTERVAL_MIN_S} max={INTERVAL_MAX_S} step={1} value={value} autoFocus
+          aria-invalid={!!problem} onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void save(); }} />
+        {problem ? <span className="field-error" role="alert">{problem}</span>
+          : <span className="field-hint">{INTERVAL_MIN_S} to {INTERVAL_MAX_S} s. {hint}</span>}
+      </label>
+    </Modal>
   );
 }
 
