@@ -80,4 +80,26 @@ class AuthServiceLockoutTest {
         assertThat(r).isEqualTo(new AuthService.LoginResult.BadCredentials("nobody@corrosionwatch.app", null, true));
         verify(audit, never()).record(eq(LoginAudit.USER_LOGIN), any(), any(), anyMap());
     }
+
+    @Test
+    void successRecordsTheLastLoginAndFailureDoesNot() {
+        auth.login(EMAIL, "wrong");
+        assertThat(user.getLastLoginAt()).isNull();
+
+        auth.login(EMAIL, RIGHT);
+        assertThat(user.getLastLoginAt()).isEqualTo(clock.instant());
+    }
+
+    @Test
+    void disabledAccountGetsTheWrongPasswordAnswerEvenWithTheRightPassword() {
+        org.springframework.test.util.ReflectionTestUtils.setField(user, "enabled", false);
+
+        AuthService.LoginResult r = auth.login(EMAIL, RIGHT);
+
+        assertThat(r).isInstanceOf(AuthService.LoginResult.BadCredentials.class);
+        assertThat(user.getLastLoginAt()).isNull();
+        assertThat(user.loginState()).as("not counted towards a lock").isEqualTo(LoginPolicy.State.CLEAN);
+        verify(audit).record(eq(LoginAudit.USER_LOGIN_FAILED), eq(EMAIL), any(),
+                eq(java.util.Map.of("reason", "DISABLED")));
+    }
 }
