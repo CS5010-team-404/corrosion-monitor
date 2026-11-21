@@ -207,8 +207,21 @@ Names and purpose only; never commit real values. `scripts/gen-secrets.sh` print
 
 ```bash
 mvn -B verify                          # backend and simulator (needs Docker running for the MySQL tests)
-mvn -B -f platform/pom.xml verify      # data platform, with a JaCoCo coverage report
+mvn -B -f platform/pom.xml verify      # data platform (its integration tests also need Docker)
 cd frontend && npm install && npm run lint && npm test && npm run build
+```
+
+### Coverage
+
+Each `verify` writes a JaCoCo report, and the frontend has a coverage run. CI prints the totals in the build log
+and the run summary.
+
+```bash
+mvn -B verify                                    # report: backend/target/site/jacoco/index.html
+python3 scripts/coverage-summary.py backend/target/site/jacoco/jacoco.csv
+mvn -B -f platform/pom.xml verify                # one report for all modules: platform/ecp-platform-app/target/site/jacoco-aggregate/index.html
+python3 scripts/coverage-summary.py platform/ecp-platform-app/target/site/jacoco-aggregate/jacoco.csv
+cd frontend && npm run test:coverage             # summary in the terminal, report: frontend/coverage/index.html
 ```
 
 Results from a fresh clone of `dev` on 2026-11-08:
