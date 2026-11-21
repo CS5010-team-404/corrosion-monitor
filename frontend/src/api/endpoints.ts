@@ -59,7 +59,17 @@ export const resolve = (id: number, notes?: string) => post<T.Alert>(`/api/v1/al
 export const addAction = (id: number, actionType: string, notes: string) => post<T.CorrectiveAction>(`/api/v1/alerts/${id}/actions`, { actionType, notes });
 
 // audit (Anela)
-export const auditLog = (params: { size?: number; page?: number; actor?: string; action?: string } = {}) => api<T.AuditEntry[]>(`/api/v1/audit${q({ size: 500, ...params })}`, {});
+export interface AuditQuery { page: number; size: number; actor?: string | null; from?: string | null; to?: string | null }
+/**
+ * GET /api/v1/audit (page from 0). Accepts both shapes: the agreed { items, page, size, total } (paged: true) and the
+ * older plain array of one page (paged: false, total unknown, so the caller asks for the maximum and pages locally).
+ */
+export const auditPage = async (params: AuditQuery): Promise<T.AuditPage & { paged: boolean }> => {
+  const r = await api<T.AuditEntry[] | T.AuditPage>(`/api/v1/audit${q({ ...params })}`, {});
+  return Array.isArray(r) ? { items: r, page: params.page, size: r.length, total: r.length, paged: false } : { ...r, paged: true };
+};
+/** The backend's page-size cap for GET /api/v1/audit. */
+export const AUDIT_MAX_PAGE = 200;
 export const verifyChain = () => post<T.ChainVerification>("/api/v1/audit/verify");
 
 // reports (Aayushee with Dumebi)
