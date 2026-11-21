@@ -50,6 +50,8 @@ ecp:
   simulator:
     enabled: ${ECP_SIMULATOR_ENABLED:true}
     scenario-speed: ${ECP_SIMULATOR_SPEED:1.0}  # 1.0 = demo speed; 0.17 = realistic
+  scheduling:
+    enabled: ${ECP_SCHEDULING_ENABLED:true}  # false: no background jobs (tests run them directly)
   ingestion:
     max-clock-skew: PT5M
   retention:
