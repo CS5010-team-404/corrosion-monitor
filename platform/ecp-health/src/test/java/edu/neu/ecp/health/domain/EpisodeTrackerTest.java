@@ -43,6 +43,26 @@ class EpisodeTrackerTest {
     }
 
     @Test
+    void undecidedIssueStaysOpenWithoutCountingTowardsRecovery() {
+        EpisodeTracker tracker = new EpisodeTracker(3, Set.of(HealthIssue.OFFLINE));
+        for (int i = 0; i < 5; i++) {
+            EpisodeTracker.Transition t = tracker.apply(Set.of(), Set.of(HealthIssue.OFFLINE));
+            assertFalse(t.changed());
+            assertEquals(Set.of(HealthIssue.OFFLINE), t.active());
+        }
+        // once it can be judged again, normal rules apply: OFFLINE closes on the first good evaluation
+        assertEquals(Set.of(HealthIssue.OFFLINE), tracker.apply(Set.of()).closed());
+    }
+
+    @Test
+    void undecidedIssueThatWasNotOpenStaysClosed() {
+        EpisodeTracker tracker = new EpisodeTracker(3, Set.of());
+        EpisodeTracker.Transition t = tracker.apply(Set.of(), Set.of(HealthIssue.OFFLINE));
+        assertFalse(t.changed());
+        assertTrue(t.active().isEmpty());
+    }
+
+    @Test
     void issuesReloadedAfterRestartAreNotReopened() {
         EpisodeTracker tracker = new EpisodeTracker(3, Set.of(HealthIssue.LOSSY));
         EpisodeTracker.Transition t = tracker.apply(Set.of(HealthIssue.LOSSY));

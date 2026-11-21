@@ -29,6 +29,14 @@ public final class EpisodeTracker {
     }
 
     public Transition apply(Set<HealthIssue> detected) {
+        return apply(detected, Set.of());
+    }
+
+    /**
+     * @param undecided issues that could not be judged this time: an open one stays open without counting towards
+     *                  recovery, and a closed one stays closed
+     */
+    public Transition apply(Set<HealthIssue> detected, Set<HealthIssue> undecided) {
         Set<HealthIssue> opened = EnumSet.noneOf(HealthIssue.class);
         Set<HealthIssue> closed = EnumSet.noneOf(HealthIssue.class);
 
@@ -39,7 +47,7 @@ public final class EpisodeTracker {
             }
         }
         for (HealthIssue issue : EnumSet.copyOf(open)) {
-            if (detected.contains(issue)) {
+            if (detected.contains(issue) || undecided.contains(issue)) {
                 continue;
             }
             int streak = cleanStreak.merge(issue, 1, Integer::sum);

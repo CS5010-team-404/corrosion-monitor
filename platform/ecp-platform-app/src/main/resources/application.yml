@@ -62,3 +62,4 @@ ecp:
     stuck-min-readings: 20
     recovery-evaluations: 3
     service-stale-after: PT2M
+    startup-grace: ${ECP_HEALTH_STARTUP_GRACE:PT3M}   # no OFFLINE this soon after a platform restart
