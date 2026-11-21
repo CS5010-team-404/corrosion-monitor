@@ -33,6 +33,8 @@
 
   <dependencyManagement>
     <dependencies>
+      <!-- Same Testcontainers as the backend: 1.21.4 works with current Docker Engine API versions. -->
+      <dependency><groupId>org.testcontainers</groupId><artifactId>testcontainers-bom</artifactId><version>1.21.4</version><type>pom</type><scope>import</scope></dependency>
       <dependency><groupId>edu.neu.ecp</groupId><artifactId>ecp-common</artifactId><version>${project.version}</version></dependency>
       <dependency><groupId>edu.neu.ecp</groupId><artifactId>ecp-simulator</artifactId><version>${project.version}</version></dependency>
       <dependency><groupId>edu.neu.ecp</groupId><artifactId>ecp-forecast</artifactId><version>${project.version}</version></dependency>
