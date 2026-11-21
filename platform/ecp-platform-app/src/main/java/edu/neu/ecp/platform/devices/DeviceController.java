@@ -4,13 +4,18 @@ import edu.neu.ecp.common.audit.AuditEvent;
 import edu.neu.ecp.common.audit.AuditRecorder;
 import edu.neu.ecp.ingestion.SensorRegistry;
 import edu.neu.ecp.ingestion.SensorSecretCipher;
+import edu.neu.ecp.platform.demo.EmbeddedSimulator;
 import java.security.Principal;
+import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -32,26 +37,71 @@ public class DeviceController {
     public record Registered(String deviceId, String secret, String note) {
     }
 
+    /** PATCH body. Only the reporting interval can be changed for now (FR1). */
+    public record UpdateRequest(Integer expectedIntervalS) {
+    }
+
+    // never return secret_enc; keys match Device in frontend/src/api/types.ts
+    private static final String DEVICE_COLUMNS = """
+            SELECT id, device_id AS deviceId, kind, model, expected_interval_s AS expectedIntervalS, active,
+                   equipment_id AS equipmentId, equipment_name AS equipmentName,
+                   location_name AS locationName, created_at AS createdAt
+            FROM sensors
+            """;
+
     private final JdbcTemplate jdbc;
     private final SensorSecretCipher cipher;
     private final SensorRegistry registry;
     private final AuditRecorder audit;
+    private final EmbeddedSimulator simulator;
+    private final TransactionTemplate tx;
 
-    public DeviceController(JdbcTemplate jdbc, SensorSecretCipher cipher, SensorRegistry registry, AuditRecorder audit) {
+    public DeviceController(JdbcTemplate jdbc, SensorSecretCipher cipher, SensorRegistry registry, AuditRecorder audit,
+                            EmbeddedSimulator simulator, TransactionTemplate tx) {
         this.jdbc = jdbc;
         this.cipher = cipher;
         this.registry = registry;
         this.audit = audit;
+        this.simulator = simulator;
+        this.tx = tx;
     }
 
     @GetMapping("/api/v1/sensors")
     public List<Map<String, Object>> list() {
-        return jdbc.queryForList("""
-                SELECT id, device_id AS deviceId, kind, model, expected_interval_s AS expectedIntervalS, active,
-                       equipment_id AS equipmentId, equipment_name AS equipmentName,
-                       location_name AS locationName, created_at AS createdAt
-                FROM sensors ORDER BY device_id
-                """); // never return secret_enc; keys match Device in frontend/src/api/types.ts
+        return jdbc.queryForList(DEVICE_COLUMNS + " ORDER BY device_id");
+    }
+
+    /**
+     * Changes a sensor's expected reporting interval (admin only, via the /api/v1/admin/** rule). Sensor health judges
+     * LATE/OFFLINE against the new value from its next pass, and a simulated device switches to it at once; a physical
+     * device has to be set to the same interval on the device itself.
+     */
+    @PatchMapping("/api/v1/admin/sensors/{id}")
+    public Map<String, Object> update(@PathVariable long id, @RequestBody UpdateRequest r, Principal principal) {
+        Integer interval = r.expectedIntervalS();
+        ReportingInterval.problem(interval).ifPresent(message -> {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
+        });
+        Map<String, Object> before = find(id);
+        String deviceId = (String) before.get("deviceId");
+        int previous = ((Number) before.get("expectedIntervalS")).intValue();
+        if (previous != interval) {
+            tx.executeWithoutResult(status -> {
+                jdbc.update("UPDATE sensors SET expected_interval_s = ? WHERE id = ?", interval, id);
+                Map<String, Object> details = new LinkedHashMap<>();
+                details.put("sensorId", id);
+                details.put("fromSeconds", previous);
+                details.put("toSeconds", interval);
+                audit.record(AuditEvent.user(name(principal), "SENSOR_INTERVAL_CHANGED", "sensor", deviceId, details));
+            });
+            simulator.setInterval(deviceId, Duration.ofSeconds(interval));
+        }
+        return find(id);
+    }
+
+    private Map<String, Object> find(long id) {
+        return jdbc.queryForList(DEVICE_COLUMNS + " WHERE id = ?", id).stream().findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No sensor " + id));
     }
 
     @PostMapping("/api/v1/admin/sensors")
