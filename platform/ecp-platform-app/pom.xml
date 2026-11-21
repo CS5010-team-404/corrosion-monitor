@@ -7,6 +7,8 @@
   <artifactId>ecp-platform-app</artifactId>
   <description>Runnable data platform service: ingestion + sensor health + simulator + forecast API</description>
   <dependencies>
+    <!-- Used directly (signals, audit, live updates); declared so the aggregated coverage report includes it. -->
+    <dependency><groupId>edu.neu.ecp</groupId><artifactId>ecp-common</artifactId></dependency>
     <dependency><groupId>edu.neu.ecp</groupId><artifactId>ecp-ingestion</artifactId></dependency>
     <dependency><groupId>edu.neu.ecp</groupId><artifactId>ecp-health</artifactId></dependency>
     <dependency><groupId>edu.neu.ecp</groupId><artifactId>ecp-simulator</artifactId></dependency>
