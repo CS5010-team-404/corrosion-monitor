@@ -133,7 +133,7 @@ export function Overview() {
             ) : <div className="card"><Empty title="No equipment matches" text="Clear the filters to see everything." /></div>}
           </>
         ) : (
-          <DataTable rows={list.map((e) => ({ ...e, id: e.equipmentId }))} tools={filters} initialSort={{ key: "margin", dir: "asc" }} pageSize={8} onRowClick={(e) => navigate(`/equipment/${e.equipmentId}`)}
+          <DataTable rows={list.map((e) => ({ ...e, id: e.equipmentId }))} tableId="equipment" tools={filters} initialSort={{ key: "margin", dir: "asc" }} pageSize={8} onRowClick={(e) => navigate(`/equipment/${e.equipmentId}`)}
             columns={[
               { key: "name", label: "Equipment", sortable: true, sortValue: (e) => e.equipmentName, render: (e) => <><div className="cell-main">{e.equipmentName}</div><div className="cell-sub">{e.locationName}</div></> },
               { key: "rail", label: "Dew point and surface", width: "26%", render: (e) => <MarginRail dew={e.dewPointC} surface={e.surfaceTempC} warn={e.marginWarningC} crit={e.marginCriticalC} untrusted={!e.trusted} /> },
