@@ -212,17 +212,30 @@ Names and purpose only; never commit real values. `scripts/gen-secrets.sh` print
 
 ```bash
 mvn -B verify                          # backend and simulator (needs Docker running for the MySQL tests)
-mvn -B -f platform/pom.xml verify      # data platform, with a JaCoCo coverage report
+mvn -B -f platform/pom.xml verify      # data platform (its integration tests also need Docker)
 cd frontend && npm install && npm run lint && npm test && npm run build
 ```
 
-Results from a fresh clone of `dev` on 2026-11-08:
+### Coverage
 
-| Suite    | Command                                     | Result                                                                    |
-|----------|---------------------------------------------|---------------------------------------------------------------------------|
-| Backend  | `mvn -B verify`                             | `Tests run: 181, Failures: 0, Errors: 0, Skipped: 0`                      |
-| Platform | `mvn -B -f platform/pom.xml verify`         | 47 tests: common 7, simulator 7, forecast 6, health 18, app 9; 0 failures |
-| Frontend | `npm run lint`, `npm test`, `npm run build` | type check passes, `Tests 14 passed (14)`, build passes                   |
+Each `verify` writes a JaCoCo report, and the frontend has a coverage run. CI prints the totals in the build log
+and the run summary.
+
+```bash
+mvn -B verify                                    # report: backend/target/site/jacoco/index.html
+python3 scripts/coverage-summary.py backend/target/site/jacoco/jacoco.csv
+mvn -B -f platform/pom.xml verify                # one report for all modules: platform/ecp-platform-app/target/site/jacoco-aggregate/index.html
+python3 scripts/coverage-summary.py platform/ecp-platform-app/target/site/jacoco-aggregate/jacoco.csv
+cd frontend && npm run test:coverage             # summary in the terminal, report: frontend/coverage/index.html
+```
+
+Results on 2026-11-21:
+
+| Suite     | Command                             | Result                                                        | Line coverage |
+|-----------|-------------------------------------|---------------------------------------------------------------|---------------|
+| Backend   | `mvn -B verify`                     | `Tests run: 209, Failures: 0, Errors: 0, Skipped: 0`          | 94.1 %        |
+| Platform  | `mvn -B -f platform/pom.xml verify` | 109 tests: common 7, simulator 11, forecast 6, ingestion 12, health 27, app 46; 0 failures | 85.8 % (all modules) |
+| Frontend  | `npm run lint`, `npm run test:coverage`, `npm run build` | type check passes, `Tests 53 passed (53)`, build passes | 88.3 %        |
 
 The backend's database tests run against MySQL 8.4 in Docker (Testcontainers) with the same SQL settings as
 production. What the core tests cover:

@@ -22,6 +22,17 @@ export default defineConfig(({ mode }) => {
       },
     },
     build: { outDir: "dist", sourcemap: false },
-    test: { environment: "jsdom", globals: true },
+    test: {
+      environment: "jsdom",
+      globals: true,
+      // `npm run test:coverage`: totals in the terminal (and the CI log), HTML report in coverage/index.html.
+      // Everything under src counts, the mock backend included; only tests, type declarations and the entry point don't.
+      coverage: {
+        provider: "v8",
+        reporter: ["text-summary", "text", "html"],
+        include: ["src/**/*.{ts,tsx,js}"],
+        exclude: ["src/**/*.test.{ts,tsx}", "src/__tests__/**", "src/**/*.d.ts", "src/main.tsx"],
+      },
+    },
   };
 });
