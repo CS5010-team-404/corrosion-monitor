@@ -318,7 +318,7 @@ Phase 1 listed three roles; the team agreed on four (Technician, Operator, Manag
 - Retrain the forecaster on a real dataset.
 - Audit: keep checkpoints somewhere the application cannot write.
 - First weekly release from `dev` to `main`, then security, sensor-failure and performance testing.
-- Final documentation, NIST control mapping and evaluation results.
+- Final documentation and evaluation results (the NIST control mapping is in [docs/NIST_MAPPING.md](docs/NIST_MAPPING.md)).
 
 ## Scope and design changes since Phase 1
 
@@ -464,6 +464,7 @@ The live demo runs on Render as three services from [render.yaml](render.yaml): 
 | [docs/REQUIREMENTS_TRACEABILITY.md](docs/REQUIREMENTS_TRACEABILITY.md) | Where each proposal requirement is met               |
 | [docs/1-api-contract.md](docs/1-api-contract.md)                       | Original API contract (v1)                           |
 | [docs/SENSOR_HEALTH.md](docs/SENSOR_HEALTH.md)                         | Sensor health rules                                  |
+| [docs/NIST_MAPPING.md](docs/NIST_MAPPING.md)                           | NIST SP 800-53 controls mapped to the code           |
 | [docs/ML_FORECAST.md](docs/ML_FORECAST.md)                             | Condensation forecaster                              |
 | [docs/ml-training-report.md](docs/ml-training-report.md)               | Forecaster training report                           |
 | [docs/4-simulator-design.md](docs/4-simulator-design.md)               | Sensor simulator design                              |
@@ -477,6 +478,7 @@ The live demo runs on Render as three services from [render.yaml](render.yaml): 
 ## Notes
 
 - The design is aligned with selected NIST SP 800-53 controls and the NIST CPS Framework. It is not certified or
-  compliant.
+  compliant. [docs/NIST_MAPPING.md](docs/NIST_MAPPING.md) maps each control we could check to the code, with its
+  status (Implemented, Partial or Planned) and gaps.
 - Data from the simulator is labeled as simulated wherever it appears.
 - Never commit passwords, sensor keys, tokens or `.env` files.
