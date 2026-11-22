@@ -20,6 +20,8 @@ public final class Recipes {
     static final double POSITIVE_WEIGHT = 3.0;
     static final int[] DEPTHS = {3, 5};
     static final int[] MIN_LEAVES = {20, 100};
+    /** Protocol: up to 500 trees, early stopping after 30 rounds without validation improvement. */
+    static final int MAX_TREES = 500;
 
     private Recipes() {
     }
@@ -66,20 +68,25 @@ public final class Recipes {
 
     /** GBT recipe: grid over depth × min leaf, early stopping on validation, then refit with the chosen tree count. */
     public static GbtForecaster gbt(String version, Split s) {
+        return gbt(version, s, MAX_TREES);
+    }
+
+    /** As {@link #gbt(String, Split)} with a lower tree cap (quick mode and tests only). */
+    static GbtForecaster gbt(String version, Split s, int maxTrees) {
         List<Example> all = s.all();
         Map<Integer, Gbt.Model> regs = new LinkedHashMap<>();
         Map<Integer, Gbt.Model> cls = new LinkedHashMap<>();
         Map<String, Object> notes = new LinkedHashMap<>();
         for (int i = 0; i < MarginForecaster.HORIZONS.length; i++) {
             int h = MarginForecaster.HORIZONS[i];
-            Choice c = choose(Gbt.Loss.HUBER, huberDelta(h), x(s.fit()), dy(s.fit(), i), null,
+            Choice c = choose(Gbt.Loss.HUBER, huberDelta(h), maxTrees, x(s.fit()), dy(s.fit(), i), null,
                     x(s.validation()), dy(s.validation(), i));
             regs.put(h, Gbt.fit(x(all), dy(all, i), null, c.params().withTrees(Math.max(1, c.trees()))));
             notes.put("gbt_" + h + "m", c.describe());
         }
         for (int h : MarginForecaster.WARN_HORIZONS) {
             double[] yf = binary(labels(s.fit(), h));
-            Choice c = choose(Gbt.Loss.LOGISTIC, 1.0, x(s.fit()), yf, weights(yf), x(s.validation()),
+            Choice c = choose(Gbt.Loss.LOGISTIC, 1.0, maxTrees, x(s.fit()), yf, weights(yf), x(s.validation()),
                     binary(labels(s.validation(), h)));
             double t = bestThreshold(c.model()::predict, s.validation(), h);
             double[] ya = binary(labels(all, h));
@@ -95,12 +102,12 @@ public final class Recipes {
         }
     }
 
-    static Choice choose(Gbt.Loss loss, double delta, List<double[]> xf, double[] yf, double[] wf,
+    static Choice choose(Gbt.Loss loss, double delta, int maxTrees, List<double[]> xf, double[] yf, double[] wf,
                          List<double[]> xv, double[] yv) {
         List<Gbt.Params> grid = new ArrayList<>();
         for (int depth : DEPTHS) {
             for (int leaf : MIN_LEAVES) {
-                grid.add(Gbt.Params.of(loss, depth, leaf).withHuberDelta(delta));
+                grid.add(Gbt.Params.of(loss, depth, leaf).withHuberDelta(delta).withTrees(maxTrees));
             }
         }
         // fitted in parallel, chosen in grid order (ties go to the earlier, simpler setting): deterministic

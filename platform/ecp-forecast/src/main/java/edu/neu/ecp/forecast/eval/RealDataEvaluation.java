@@ -61,6 +61,7 @@ public final class RealDataEvaluation {
     private final List<String[]> rows = new ArrayList<>();
     private final Map<String, String> chosen = new TreeMap<>();
     private final boolean quick;
+    private final int gbtTrees;
 
     RealDataEvaluation(Map<Integer, UciLoader.Location> data, boolean quick) {
         this.data = data;
@@ -75,16 +76,18 @@ public final class RealDataEvaluation {
         }
         this.t0 = lo;
         this.t1 = hi;
-        int trainRuns = quick ? 20 : TRAIN_RUNS;
-        int testRuns = quick ? 6 : TEST_RUNS;
+        int trainRuns = quick ? 6 : TRAIN_RUNS;
+        int testRuns = quick ? 3 : TEST_RUNS;
+        int hours = quick ? 3 : SIM_HOURS;
+        this.gbtTrees = quick ? 60 : Recipes.MAX_TREES;
         List<Example> st = new ArrayList<>();
         for (int s = 0; s < trainRuns; s++) {
-            st.addAll(scoredOnly(Examples.of(-1, -1, SimulatedHistory.run(1000 + s, SIM_HOURS), 1, 2)));
+            st.addAll(scoredOnly(Examples.of(-1, -1, SimulatedHistory.run(1000 + s, hours), 1, 2)));
         }
         this.simTrain = st;
         List<List<Example>> test = new ArrayList<>();
         for (int s = 0; s < testRuns; s++) {
-            test.add(Examples.of(-2, s, SimulatedHistory.run(900_000 + s, SIM_HOURS), 1, 1));
+            test.add(Examples.of(-2, s, SimulatedHistory.run(900_000 + s, hours), 1, 1));
         }
         this.simTest = test;
     }
@@ -189,12 +192,12 @@ public final class RealDataEvaluation {
                 yield Models.ridge(r, f);
             }
             case GBT_REAL -> {
-                GbtForecaster f = Recipes.gbt(tag, s);
+                GbtForecaster f = Recipes.gbt(tag, s, gbtTrees);
                 note(tag, r, f.metrics());
                 yield Models.gbt(r, f);
             }
             case GBT_SIM_REAL -> {
-                GbtForecaster f = Recipes.gbt(tag, withSim(s));
+                GbtForecaster f = Recipes.gbt(tag, withSim(s), gbtTrees);
                 note(tag, r, f.metrics());
                 yield Models.gbt(r, f);
             }
@@ -308,7 +311,7 @@ public final class RealDataEvaluation {
         String version = (recipe.startsWith("GBT") ? "gbt" : "ridge") + (sim ? "-simreal" : "-real") + "-uci-o"
                 + MAIN_OFFSET;
         if (recipe.startsWith("GBT")) {
-            GbtForecaster f = Recipes.gbt(version, s);
+            GbtForecaster f = Recipes.gbt(version, s, gbtTrees);
             note("final", recipe, f.metrics());
             GbtForecaster g = ModelIO.gbtFromJson(ModelIO.gbtToJson(f)); // score exactly what would be shipped
             return new Candidate(recipe, Models.gbt(recipe, g), ModelIO.gbtToJson(f), Double.NaN, g::forecast);
