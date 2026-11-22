@@ -463,7 +463,7 @@ The live demo runs on Render as three services from [render.yaml](render.yaml): 
 | [docs/GAPS.md](docs/GAPS.md)                                           | What is still missing, with owners                   |
 | [docs/REQUIREMENTS_TRACEABILITY.md](docs/REQUIREMENTS_TRACEABILITY.md) | Where each proposal requirement is met               |
 | [docs/1-api-contract.md](docs/1-api-contract.md)                       | Original API contract (v1)                           |
-| [docs/SENSOR_HEALTH.md](docs/SENSOR_HEALTH.md)                         | Sensor health rules                                  |
+| [docs/SENSOR_HEALTH.md](docs/SENSOR_HEALTH.md)                         | Sensor health rules and the real-data check          |
 | [docs/ML_FORECAST.md](docs/ML_FORECAST.md)                             | Condensation forecaster                              |
 | [docs/ml-training-report.md](docs/ml-training-report.md)               | Forecaster training report                           |
 | [docs/4-simulator-design.md](docs/4-simulator-design.md)               | Sensor simulator design                              |

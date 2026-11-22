@@ -12,5 +12,7 @@
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-jdbc</artifactId></dependency>
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
   </dependencies>
-
+  <build><plugins><plugin><groupId>org.codehaus.mojo</groupId><artifactId>exec-maven-plugin</artifactId><version>3.5.0</version>
+    <!-- scripts/evaluate-health-intel-lab.sh: replay the Intel Berkeley Lab data through the health rules -->
+    <configuration><mainClass>edu.neu.ecp.health.realdata.IntelLabEvaluation</mainClass></configuration></plugin></plugins></build>
 </project>
