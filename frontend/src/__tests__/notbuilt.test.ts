@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PENDING, alerts, assessments, equipmentStatus, profiles, sensorsHealth, users } from "../api/endpoints";
-import { ApiError, NotBuiltError, isSample } from "../lib/api";
+import { ApiError, NotBuiltError, api, isSample } from "../lib/api";
 import { config } from "../lib/config";
 import { ErrorState } from "../components/ui";
 import { MAX_FAILED_ATTEMPTS, StompClient, retryDelay } from "../lib/stomp";
@@ -30,7 +30,9 @@ describe("endpoints that aren't built yet", () => {
 
   it("treats 501 the same way", async () => {
     fetchMock.mockResolvedValue(respond(501));
-    await expect(profiles()).rejects.toMatchObject({ status: 501, pending: PENDING.profiles });
+    // assessments is the only pending endpoint and the test above already marked it not built, so use a fresh entry.
+    const fresh = { ...PENDING.assessments, key: "assessments-501" };
+    await expect(api("/api/v1/equipment/1/assessments", {}, fresh)).rejects.toMatchObject({ status: 501, pending: fresh });
   });
 
   it("never treats a real (platform) endpoint's 404 as not built, and never falls back for it", async () => {
@@ -45,9 +47,19 @@ describe("endpoints that aren't built yet", () => {
   it("with VITE_MOCK_FALLBACK answers a not-built endpoint from the mock and marks the data as sample", async () => {
     config.mockFallback = true;
     fetchMock.mockResolvedValue(respond(404));
-    const list = await profiles();
+    const list = await assessments(1, 120);
     expect(Array.isArray(list)).toBe(true);
     expect(isSample(list)).toBe(true);
+  });
+
+  it("treats equipment profiles as built: a 404 is a real error, never sample data", async () => {
+    config.mockFallback = true;
+    fetchMock.mockResolvedValue(respond(404, { message: "No such path" }));
+    const err = await profiles().catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).not.toBeInstanceOf(NotBuiltError);
+    expect(isSample(err)).toBe(false);
+    expect(PENDING).not.toHaveProperty("profiles");
   });
 
   it("treats equipment status as built: a 404 is a real error, never sample data", async () => {
@@ -85,9 +97,9 @@ describe("endpoints that aren't built yet", () => {
 
 describe("not built yet panel", () => {
   it("shows the calm panel with endpoint and owner instead of the error state", () => {
-    render(createElement(ErrorState, { error: new NotBuiltError(404, PENDING.profiles), onRetry: () => {} }));
+    render(createElement(ErrorState, { error: new NotBuiltError(404, PENDING.assessments), onRetry: () => {} }));
     expect(screen.getByText("Not built yet")).toBeTruthy();
-    expect(screen.getByText(/It needs GET \/api\/v1\/profiles \(owner: team\)/)).toBeTruthy();
+    expect(screen.getByText(/It needs GET \/api\/v1\/equipment\/\{id\}\/assessments \(owner: Aayushee\)/)).toBeTruthy();
     expect(screen.queryByText("Could not load this page")).toBeNull();
   });
 });

@@ -25,9 +25,12 @@ All paths use the `/api/v1` prefix (decision 3 in `DECISIONS.md`).
 | `GET /api/v1/alerts?status=ALL\|ACTIVE\|OPEN\|ACKNOWLEDGED\|RESOLVED&limit=` | backend, alerts | `Alert[]` |
 | `GET /api/v1/alerts/{id}` | backend, alerts | `{alert, actions}` |
 | `POST /api/v1/alerts/{id}/acknowledge` · `/resolve {notes}` · `/actions {actionType, notes}` | backend, alerts | technician, admin |
-| `GET /api/v1/audit?size=&page=&actor=&action=` · `POST /api/v1/audit/verify` | backend, audit | `AuditEntry[]` · `{intact, checked, firstBrokenId}` |
+| `GET /api/v1/audit?page=0&size=50&actor=&action=&entityType=&from=&to=` | backend, audit | MANAGER, ADMIN; `{items: AuditEntry[], page, size, total}` newest first; `page` from 0, `size` default 50, max 200 (the response gives the size used); `total` counts every match; each entry has `prevHash` and `hash` (audit_log `prev_hash`, `entry_hash`) |
+| `POST /api/v1/audit/verify` | backend, audit | MANAGER, ADMIN; `{intact, checked, firstBrokenId, message}`; the run is stored and recorded as `AUDIT_VERIFIED` |
+| `GET /api/v1/audit/verifications` · `GET` / `POST /api/v1/audit/checkpoints` | backend, audit | ADMIN only; other roles get 403 "Administrator access required." and an `ACCESS_DENIED` audit event |
 | `GET /api/v1/reports/summary?from=&to=&location=` and `.csv` / `.pdf` | backend, analytics + alerts | `ReportSummary`, files (OpenPDF) |
-| `GET /api/v1/profiles` | backend | config |
+| `GET /api/v1/profiles` | backend, audit (Anela) | any signed-in user; `Profile[]` (types.ts) from `equipment_profile`, by id |
+| `PUT /api/v1/profiles/{id}` `{name?, rhWarningPct, rhCriticalPct, marginWarningC, marginCriticalC, tempMinC, tempMaxC, surfaceOffsetC}` | backend, audit (Anela) | ADMIN only (others 403 + `ACCESS_DENIED`); returns the `Profile`; numbers stored to 2 decimals. 400 `INVALID_PROFILE` with `message` and `problems[]` unless warning margin > critical margin > 0, 0 ≤ warning RH < critical RH ≤ 100, 0 ≤ surface offset ≤ 20, temp min < temp max (−60..100 °C); 404 unknown id; 409 `NAME_TAKEN`. A change writes `PROFILE_UPDATED` (entity `equipment_profile`/id, details `{profileId, old, new}`) to `audit_outbox` in the same transaction; saving identical values writes nothing. Analytics reads profiles per request, so new thresholds apply at once |
 | `GET /api/v1/admin/users` · `POST /api/v1/admin/users/{id}/unlock` · `PATCH /api/v1/admin/users/{id} {role}` | backend, auth (decision 1) | `User[]` · `User`; admins only. 409 `ROLE_CHANGE_REFUSED` for self-demotion or the last admin. Audited as `ACCOUNT_UNLOCKED`, `USER_ROLE_CHANGED` (`oldRole`, `newRole`) |
 | `GET /api/v1/health/sensors` · `/api/v1/health/sensors/{id}?minutes=` · `/api/v1/health/events` · `/api/v1/health/services` | platform | sensor health |
 | `GET /api/v1/sensors` · `POST /api/v1/admin/sensors` · `POST /api/v1/admin/sensors/{deviceId}/rotate-secret` | platform | device registry; secret returned once |

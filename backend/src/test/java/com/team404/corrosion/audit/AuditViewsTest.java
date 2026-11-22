@@ -25,6 +25,24 @@ class AuditViewsTest {
         assertEquals("user", view.entityType());
         assertEquals("1", view.entityId());
         assertEquals("{\"role\":\"ADMIN\"}", view.details());
+        assertEquals(HashChain.GENESIS_HASH, view.prevHash());
+        assertEquals(entry.entryHash(), view.hash());
+    }
+
+    @Test
+    void pageCarriesItsNumberSizeAndTotalAndLinkedHashes() {
+        List<AuditEntry> chain = TestChains.chain(3);
+        List<AuditEntry> newestFirst = List.of(chain.get(2), chain.get(1));
+
+        AuditViews.PageView view = AuditViews.page(new AuditService.PageResult<>(newestFirst, 0, 2, 3));
+
+        assertEquals(0, view.page());
+        assertEquals(2, view.size());
+        assertEquals(3L, view.total());
+        assertEquals(2, view.items().size());
+        assertEquals(3L, view.items().get(0).id());
+        // each entry's prevHash is the hash of the entry before it
+        assertEquals(view.items().get(1).hash(), view.items().get(0).prevHash());
     }
 
     @Test

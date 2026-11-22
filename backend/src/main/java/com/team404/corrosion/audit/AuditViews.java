@@ -12,9 +12,16 @@ public final class AuditViews {
 
     private static final String ADMIN_ROLE = "ADMIN";
 
-    /** One audit entry as the UI reads it. Times are ISO-8601 instants in UTC. */
+    /**
+     * One audit entry as the UI reads it. Times are ISO-8601 instants in UTC. prevHash and hash are audit_log's
+     * prev_hash and entry_hash, so anyone can follow the chain from the page.
+     */
     public record EntryView(long id, Instant occurredAt, String actorType, String actor, String action,
-                            String entityType, String entityId, String details) {
+                            String entityType, String entityId, String details, String prevHash, String hash) {
+    }
+
+    /** One page of GET /api/v1/audit: {items, page, size, total}, newest first; page starts at 0. */
+    public record PageView(List<EntryView> items, int page, int size, long total) {
     }
 
     /** Result of the verify button: intact, how many entries were checked, and the first broken entry if any. */
@@ -26,7 +33,12 @@ public final class AuditViews {
 
     public static EntryView entry(AuditEntry e) {
         return new EntryView(e.id(), e.occurredAt().toInstant(ZoneOffset.UTC), e.actorType(), e.actor(), e.action(),
-                e.entityType(), e.entityId(), e.details());
+                e.entityType(), e.entityId(), e.details(), e.prevHash(), e.entryHash());
+    }
+
+    public static PageView page(AuditService.PageResult<AuditEntry> result) {
+        return new PageView(result.items().stream().map(AuditViews::entry).toList(), result.page(), result.size(),
+                result.total());
     }
 
     public static VerifyView verify(VerificationResult r) {
@@ -38,7 +50,10 @@ public final class AuditViews {
         return roles != null && roles.contains(ADMIN_ROLE);
     }
 
-    /** True when the roles claim contains exactly MANAGER or ADMIN: may read the audit list (docs/CONTRACTS.md). */
+    /**
+     * True when the roles claim contains exactly MANAGER or ADMIN: may read the audit list and verify the chain
+     * (docs/CONTRACTS.md).
+     */
     public static boolean canViewLog(List<String> roles) {
         return roles != null && (roles.contains(ADMIN_ROLE) || roles.contains("MANAGER"));
     }

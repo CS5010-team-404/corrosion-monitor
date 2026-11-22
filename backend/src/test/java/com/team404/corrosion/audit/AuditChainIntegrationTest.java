@@ -12,6 +12,12 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -226,6 +232,67 @@ class AuditChainIntegrationTest {
         assertEquals(3L, newestFirst.total());
         assertEquals(3L, newestFirst.items().get(0).id());
         assertEquals(2, newestFirst.items().size());
+    }
+
+    /**
+     * Two workers (two instances, as in two backend replicas, each with its own connections) drain the same outbox at
+     * the same time while another service keeps writing to it. The lock on audit_chain_head must make them take turns:
+     * one intact chain, every outbox row chained exactly once, no worker failing.
+     */
+    @Test
+    void twoWorkersDrainingAtOnceBuildOneIntactChain() throws Exception {
+        int before = 3 * AuditChainWorker.BATCH_SIZE + 50;
+        int during = 100;
+        for (int i = 0; i < before; i++) {
+            outbox(null, "user" + i, "USER_LOGIN");
+        }
+        AuditChainWorker second = new AuditChainWorker(new AuditStore(jdbc),
+                new DataSourceTransactionManager(dataSource), Clock.systemUTC());
+
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(3);
+        try {
+            Callable<Integer> writer = () -> {
+                start.await();
+                for (int i = 0; i < during; i++) {
+                    outbox(null, "late" + i, "ALERT_OPENED");
+                }
+                return 0;
+            };
+            Future<Integer> a = pool.submit(drainRepeatedly(worker, start));
+            Future<Integer> b = pool.submit(drainRepeatedly(second, start));
+            Future<Integer> w = pool.submit(writer);
+            start.countDown();
+            w.get(60, TimeUnit.SECONDS);
+            int chainedByBoth = a.get(60, TimeUnit.SECONDS) + b.get(60, TimeUnit.SECONDS);
+            // whatever the writer added after the last drain
+            chainedByBoth += worker.drainAll();
+
+            assertEquals(before + during, chainedByBoth);
+        } finally {
+            pool.shutdownNow();
+        }
+
+        assertEquals((long) before + during, store.count(AuditStore.Filter.NONE));
+        assertEquals(Long.valueOf(before + during),
+                jdbc.queryForObject("SELECT COUNT(DISTINCT outbox_id) FROM audit_log", Long.class));
+        assertEquals(Long.valueOf(0),
+                jdbc.queryForObject("SELECT COUNT(*) FROM audit_outbox WHERE chained_at IS NULL", Long.class));
+        VerificationResult result = service.verify("admin@corrosionwatch.app");
+        assertTrue(result.valid(), result.message());
+        assertEquals((long) before + during, result.entriesChecked());
+    }
+
+    /** Drains five times in a row, so the two workers' turns interleave; returns how many entries it chained. */
+    private static Callable<Integer> drainRepeatedly(AuditChainWorker w, CountDownLatch start) {
+        return () -> {
+            start.await();
+            int total = 0;
+            for (int i = 0; i < 5; i++) {
+                total += w.drainAll();
+            }
+            return total;
+        };
     }
 
     /** Needs the append-only triggers migration (or an equivalent one in the team's schema) to be present. */

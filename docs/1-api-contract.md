@@ -63,9 +63,10 @@ corrective actions); managers and admins see reports and the audit log; admins c
 | POST | /api/v1/alerts/{id}/actions | Technician, Admin | Log corrective action `{"actionType": "...", "notes": "..."}` |
 | GET | /api/v1/sensors | Admin | List sensors and health |
 | POST | /api/v1/sensors | Admin | Register sensor, returns secret once |
-| PUT | /api/v1/profiles/{id} | Admin | Change thresholds |
-| GET | /api/v1/audit?size=&page=&actor=&action= | Manager, Admin | Query audit log |
-| POST | /api/v1/audit/verify | Admin | Verify hash chain |
+| GET | /api/v1/profiles | all signed in | List equipment profiles |
+| PUT | /api/v1/profiles/{id} | Admin | Change thresholds (validated, 400 `INVALID_PROFILE`; audited `PROFILE_UPDATED`) |
+| GET | /api/v1/audit?page=&size=&actor=&action=&entityType=&from=&to= | Manager, Admin | Query audit log: `{items, page, size, total}`, newest first, size default 50 and max 200, entries include `prevHash` and `hash` |
+| POST | /api/v1/audit/verify | Manager, Admin | Verify hash chain |
 | GET | /api/v1/reports/summary?from=&to=&location= | Manager, Admin | Report summary (JSON); period `[from, to)` as ISO-8601 instants, either optional |
 | GET | /api/v1/reports/summary.csv · /summary.pdf | Manager, Admin | Same numbers as a CSV (one row per metric) or PDF file |
 

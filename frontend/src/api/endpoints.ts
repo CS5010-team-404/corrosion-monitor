@@ -24,7 +24,6 @@ export const login = async (email: string, password: string): Promise<T.LoginRes
 const pending = (key: string, what: string, endpoint: string, owner: string): Pending => ({ key, what, endpoint, owner });
 export const PENDING = {
   assessments: pending("assessments", "Equipment history", "GET /api/v1/equipment/{id}/assessments", "Aayushee"),
-  profiles: pending("profiles", "Equipment profiles", "GET /api/v1/profiles", "team"),
 } as const;
 
 // The picker's `to` is the start of the last chosen day; the backend's period is [from, to), so send the end of that day.
@@ -77,8 +76,8 @@ export const reportSummary = (from: number | null, to: number | null, location: 
 export const reportFile = (kind: "csv" | "pdf", from: number | null, to: number | null, location: string) =>
   api<Blob>(`/api/v1/reports/summary.${kind}${range(from, to, location)}`, {});
 
-// configuration (team)
-export const profiles = () => api<T.Profile[]>("/api/v1/profiles", {}, PENDING.profiles);
+// configuration (profiles: Anela)
+export const profiles = () => api<T.Profile[]>("/api/v1/profiles");
 
 // users (admin only; team backend)
 export const users = () => api<T.User[]>("/api/v1/admin/users");
