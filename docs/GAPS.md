@@ -9,7 +9,6 @@ Owners: Aayushee (analytics), Dumebi (alerts), Anela (audit), Joshua (platform/f
 
 ### Team (users and configuration)
 - Missing: `GET /api/v1/admin/users` (`User`: username, fullName, enabled, lockedUntil, lastLoginAt; there are no `enabled`/`last_login_at` columns). Owner: team
-- Missing: `GET /api/v1/profiles`. `equipment_profile` now has `kind`, `temp_min_c`, `temp_max_c` and `surface_offset_c` (V8), but the endpoint does not exist, and the columns are named `rh_warn_pct`/`dew_margin_warn_c`. Owner: team
 - Missing: `/topic/risk` messages (`/ws` now exists, see Done; analytics publishes through `SimpMessagingTemplate`). Owner: Aayushee
 - Mismatch: `docs/1-api-contract.md` still mentions an Auditor role; decision 4 has four roles (TECHNICIAN, OPERATOR, MANAGER, ADMIN). Owner: team
 
@@ -25,8 +24,8 @@ Owners: Aayushee (analytics), Dumebi (alerts), Anela (audit), Joshua (platform/f
 - Mismatch: `docs/1-api-contract.md` still lists `/alerts/{id}/ack` and Operator as the acting role; the code follows the UI and CONTRACTS.md (`/acknowledge`, TECHNICIAN and ADMIN). Owner: Dumebi
 
 ### Anela: audit
-- Missing: `GET /api/v1/audit` entries don't include `prevHash` and `hash` yet; the Audit page shows "–" in the Hash column until they do. Owner: Anela
-- Mismatch: the UI asks for `size=500`, the backend caps a page at 200, so the page shows the newest 200 entries. Owner: Anela + Joshua
+- Missing (UI): the Administration > Equipment profiles tab only lists profiles; `PUT /api/v1/profiles/{id}` (admin) exists but the UI has no edit form or `updateProfile` call yet. Owner: Joshua (frontend), Anela can pair
+- Later (QA): store audit times as UTC `Instant` instead of `LocalDateTime` (only if entries hashed so far provably still verify); copy checkpoints somewhere the application cannot write. Owner: Anela
 
 ### Joshua: platform
 - Duplicate: team `forecast` table (keyed by location) vs the platform's `sensor_forecasts` table (per sensor, published every minute) and forecast API (`/api/v1/sensors/{id}/forecast`); decide which analytics uses and whether the team table is dropped. Owner: Joshua + Aayushee
@@ -49,7 +48,9 @@ Owners: Aayushee (analytics), Dumebi (alerts), Anela (audit), Joshua (platform/f
 - JWT: HS256 with `ECP_JWT_SECRET` (startup fails if missing or < 32 bytes), `sub` = email, `roles` = [role], `name`, 8 hours; validated exactly like the platform. 07c7480
 - Security: stateless, CSRF off, role rules per CONTRACTS, CORS for `FRONTEND_HOST` + localhost:5173, health-only actuator (replaces the generated Basic-auth password). d19a992
 - Audit: `USER_LOGIN`, `USER_LOGIN_FAILED`, `ACCOUNT_LOCKED` written to `audit_outbox`. e689d86
-- Audit: `GET /api/v1/audit` (managers and admins), `POST /api/v1/audit/verify` (admins; others get 403 "Administrator access required.") and the outbox-to-chain worker, from PR #5 and #6. The UI uses them directly.
+- Audit paging and hashes: `GET /api/v1/audit` returns `{items, page, size, total}` (size max 200, default 50) and every entry has `prevHash` and `hash`, so the Audit page shows the true total and the chain. `POST /api/v1/audit/verify` is open to MANAGER and ADMIN as in the contract; verifications and checkpoints stay admin-only. Covered by `AuditHttpTest` (roles, `ACCESS_DENIED`, tampered chain reported broken) and a two-workers-at-once drain test.
+- Equipment profiles (FR8): `GET /api/v1/profiles` (any signed-in user) and `PUT /api/v1/profiles/{id}` (admin) on the existing `equipment_profile` columns (no migration), validated with clear 400 messages, `PROFILE_UPDATED` with old and new values in the same transaction. Removed from `PENDING` in the UI. Covered by `ProfileValidatorTest` and `ProfileHttpTest`.
+- Audit: `GET /api/v1/audit` (managers and admins), `POST /api/v1/audit/verify` and the outbox-to-chain worker, from PR #5 and #6. The UI uses them directly.
 - Demo users (one per role) from `ECP_DEMO_PASSWORD`. 62c7cff
 - UI signs in with email. 9578a2a
 - Runnable backend jar, `backend/Dockerfile`, and the `render.yaml` api block with the env vars the backend reads. ed345f2, 081e0ff

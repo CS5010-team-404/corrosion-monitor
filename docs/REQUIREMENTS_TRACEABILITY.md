@@ -10,9 +10,9 @@
 | Alerts: warning and critical, escalation | alerts, consuming `alert_signals` | Dumebi | Signals produced; lifecycle open (UI ready) |
 | Respond: acknowledge, corrective actions | alerts API | Dumebi | Open (UI ready) |
 | Control access: four roles | team auth + platform JWT validation | team / Joshua | Platform done; backend roles to confirm |
-| Tamper-evident audit log | audit chain from `audit_outbox` | Anela | Events produced; chain + verify open (UI ready) |
+| Tamper-evident audit log | audit chain from `audit_outbox` (`AuditChainWorker`, `HashChain`, `ChainVerifier`, checkpoints), `GET /api/v1/audit` (paged, with hashes), `POST /api/v1/audit/verify` | Anela | Built; unit, HTTP and MySQL integration tests (incl. tampering and two concurrent workers) |
 | Export reports, CSV or PDF (OpenPDF) | reports API | Aayushee + Dumebi | Open (UI ready, CSV works in mock) |
-| Configure profiles and devices | device registry (platform), profiles (backend) | Joshua / team | Devices done |
+| Configure profiles and devices (FR8) | device registry (platform), profiles (backend: `GET /api/v1/profiles`, admin `PUT /api/v1/profiles/{id}`, audited `PROFILE_UPDATED`) | Joshua / Anela | Devices done; profile API built and tested, UI edit form open |
 | 500 readings/s ingest | batch insert, 500 per request, rewriteBatchedStatements | Joshua | To measure (load test idea in DEMO.md) |
 | Alert within 5 s | 5 s health evaluation, signal polling | Joshua / Dumebi | Health side done |
 | Dew point ±0.5 °C | `Psychrometrics` (Magnus, Alduchov-Eskridge constants) | Joshua | Tested |
