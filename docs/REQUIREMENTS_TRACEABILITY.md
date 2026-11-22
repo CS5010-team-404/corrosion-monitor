@@ -7,11 +7,11 @@
 | Sensor health (silent, stuck, impossible, erratic, lossy, bad signatures, clock skew) | `ecp-health` | Joshua | Built, 23 tests |
 | Forecast condensation 15-60 min ahead | `ecp-forecast` + forecast API; analytics stores it | Joshua / Aayushee | Model trained and evaluated; analytics wiring open |
 | Risk index, time of wetness | analytics | Aayushee | Open (UI ready) |
-| Alerts: warning and critical, escalation | alerts, consuming `alert_signals` | Dumebi | Signals produced; lifecycle open (UI ready) |
-| Respond: acknowledge, corrective actions | alerts API | Dumebi | Open (UI ready) |
+| Alerts: warning and critical, escalation | alerts, consuming `alert_signals` | Dumebi | Built, tested: signal consumer, quiet-period auto-resolve, escalation with best-effort SMTP email (GreenMail test) |
+| Respond: acknowledge, corrective actions | alerts API | Dumebi | Built, tested (`AlertLifecycleTest`) |
 | Control access: four roles | team auth + platform JWT validation | team / Joshua | Platform done; backend roles to confirm |
 | Tamper-evident audit log | audit chain from `audit_outbox` | Anela | Events produced; chain + verify open (UI ready) |
-| Export reports, CSV or PDF (OpenPDF) | reports API | Aayushee + Dumebi | Open (UI ready, CSV works in mock) |
+| Export reports, CSV or PDF (OpenPDF) | reports API | Dumebi (risk figures: Aayushee) | Built, tested: summary, CSV, PDF; risk-level shares wait for `AnalyticsService.riskSummary` |
 | Configure profiles and devices | device registry (platform), profiles (backend) | Joshua / team | Devices done |
 | 500 readings/s ingest | batch insert, 500 per request, rewriteBatchedStatements | Joshua | To measure (load test idea in DEMO.md) |
 | Alert within 5 s | 5 s health evaluation, signal polling | Joshua / Dumebi | Health side done |
