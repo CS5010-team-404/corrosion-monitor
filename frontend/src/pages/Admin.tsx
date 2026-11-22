@@ -159,7 +159,7 @@ export function UsersTab() {
             <td className="num small">{x.lastLoginAt ? ago(x.lastLoginAt) : "Never"}</td>
             <td><div className="row" style={{ gap: 10, flexWrap: "nowrap" }}>
               {x.lockedUntil ? <Badge value="CRITICAL" text="Locked" /> : x.enabled ? <Badge value="HEALTHY" text="Active" /> : <Badge text="Disabled" />}
-              {x.lockedUntil && <Button size="sm" variant="ghost" busy={unlocking === x.id} disabled={unlocking !== null} onClick={() => unlock(x)}>Unlock</Button>}
+              {x.lockedUntil && <Button size="sm" busy={unlocking === x.id} disabled={unlocking !== null} onClick={() => unlock(x)}>Unlock</Button>}
             </div></td></tr>
         ))}
       </tbody></table></div></div>
