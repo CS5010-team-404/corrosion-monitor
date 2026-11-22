@@ -26,7 +26,6 @@ export const PENDING = {
   reportSummary: pending("reportSummary", "The report summary", "GET /api/v1/reports/summary", "Aayushee with Dumebi"),
   reportCsv: pending("reportCsv", "The CSV report", "GET /api/v1/reports/summary.csv", "Aayushee with Dumebi"),
   reportPdf: pending("reportPdf", "The PDF report", "GET /api/v1/reports/summary.pdf", "Aayushee with Dumebi"),
-  profiles: pending("profiles", "Equipment profiles", "GET /api/v1/profiles", "team"),
   users: pending("users", "The user list", "GET /api/v1/admin/users", "team"),
 } as const;
 
@@ -79,6 +78,6 @@ export const reportSummary = (from: number | null, to: number | null, location: 
 export const reportFile = (kind: "csv" | "pdf", from: number | null, to: number | null, location: string) =>
   api<Blob>(`/api/v1/reports/summary.${kind}${range(from, to, location)}`, {}, kind === "csv" ? PENDING.reportCsv : PENDING.reportPdf);
 
-// configuration (team)
-export const profiles = () => api<T.Profile[]>("/api/v1/profiles", {}, PENDING.profiles);
+// configuration (profiles: Anela, users: team)
+export const profiles = () => api<T.Profile[]>("/api/v1/profiles");
 export const users = () => api<T.User[]>("/api/v1/admin/users", {}, PENDING.users);

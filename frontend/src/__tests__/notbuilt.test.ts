@@ -45,9 +45,17 @@ describe("endpoints that aren't built yet", () => {
   it("with VITE_MOCK_FALLBACK answers a not-built endpoint from the mock and marks the data as sample", async () => {
     config.mockFallback = true;
     fetchMock.mockResolvedValue(respond(404));
-    const list = await profiles();
+    const list = await users();
     expect(Array.isArray(list)).toBe(true);
     expect(isSample(list)).toBe(true);
+  });
+
+  it("treats equipment profiles as built: a 404 is a real error, never sample data", async () => {
+    config.mockFallback = true;
+    fetchMock.mockResolvedValue(respond(404, { message: "No such path" }));
+    const err = await profiles().catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).not.toBeInstanceOf(NotBuiltError);
   });
 
   it("treats equipment status as built: a 404 is a real error, never sample data", async () => {
