@@ -124,7 +124,15 @@ async function handle(path: string, init: RequestInit): Promise<unknown> {
     if (m[2] === "actions") { a.actions.push({ type: body.actionType, notes: body.notes, by: who, at: sim.now() }); sim.addAudit(who, "CORRECTIVE_ACTION_LOGGED", "alert", a.id); return actionView(a.actions[a.actions.length - 1]); }
     return alertView(a);
   }
-  if (p === "/api/v1/audit") return S.audit.map((a: any) => ({ id: a.id, occurredAt: iso(a.at), actorType: ["alerts", "sensor-health"].includes(a.actor) ? "SYSTEM" : "USER", actor: a.actor, action: a.action, entityType: a.entity, entityId: String(a.entityId), prevHash: a.prev, hash: S.tampered && a === S.audit[12] ? "e" + a.hash.slice(1) : a.hash }));
+  const auditView = (a: any) => ({ id: a.id, occurredAt: iso(a.at), actorType: ["alerts", "sensor-health"].includes(a.actor) ? "SYSTEM" : "USER", actor: a.actor, action: a.action, entityType: a.entity, entityId: String(a.entityId), prevHash: a.prev, hash: S.tampered && a === S.audit[12] ? "e" + a.hash.slice(1) : a.hash });
+  if (p === "/api/v1/audit") {
+    // The agreed paged shape { items, page, size, total }, newest first, with the backend's filters (exact actor, from/to).
+    const page = Math.max(0, +(qp.get("page") ?? 0)), size = Math.min(200, Math.max(1, +(qp.get("size") ?? 50)));
+    const from = qp.get("from") ? Date.parse(qp.get("from")!) : null, to = qp.get("to") ? Date.parse(qp.get("to")!) : null;
+    const all = [...S.audit].filter((a: any) => (!qp.get("actor") || a.actor === qp.get("actor")) && (from == null || a.at >= from) && (to == null || a.at < to))
+      .sort((x: any, y: any) => y.id - x.id);
+    return { items: all.slice(page * size, page * size + size).map(auditView), page, size, total: all.length };
+  }
   if (p === "/api/v1/audit/verify") { await wait(900); return S.tampered ? { intact: false, checked: S.audit.length, firstBrokenId: S.audit[12].id } : { intact: true, checked: S.audit.length, firstBrokenId: null }; }
   if (p === "/api/v1/mock/tamper") { S.tampered = !!body.on; return { tampered: S.tampered }; }
   if (p === "/api/v1/reports/summary" || p === "/api/v1/reports/summary.csv" || p === "/api/v1/reports/summary.pdf") {

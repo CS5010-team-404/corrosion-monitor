@@ -71,7 +71,7 @@ export function Equipment({ id }: { id: number }) {
         <div className="art"><Art kind={e.profileKind} /></div>
         <div className="gauge" aria-label={`Humidity ${fmt(e.humidityPct, 0)} percent`}><div className="fill" style={{ height: `${clamp(e.humidityPct ?? 0, 0, 100)}%` }} /><span className="knob"><Icon name="drop" /></span><div className="pct num">{fmt(e.humidityPct, 0)}%<small>humidity</small></div></div>
         <div className="status"><div className="small muted">{e.profileName} profile</div>
-          <div className="row" style={{ gap: 10, marginTop: 4 }}><b className="num" style={{ fontSize: 24, letterSpacing: "-.02em" }}>{e.trusted ? `${fmt(e.marginC)} °C` : "–"}</b><span className="small muted">margin</span>{e.trusted ? <Badge value={e.riskLevel} /> : <Badge text="No trusted data" />}</div></div>
+          <div className="row" style={{ gap: 10, marginTop: 4 }}><b className="num" style={{ fontSize: 24, letterSpacing: "-.02em" }}>{e.trusted ? `${fmt(e.marginC)} °C` : "–"}</b><span className="small muted">margin</span>{e.trusted ? <Badge value={e.riskLevel} /> : <Badge text="No trusted reading" />}</div></div>
       </section>
 
       <div className="section" style={{ marginTop: 28 }}>
