@@ -27,7 +27,8 @@ All paths use the `/api/v1` prefix (decision 3 in `DECISIONS.md`).
 | `POST /api/v1/alerts/{id}/acknowledge` · `/resolve {notes}` · `/actions {actionType, notes}` | backend, alerts | technician, admin |
 | `GET /api/v1/audit?size=&page=&actor=&action=` · `POST /api/v1/audit/verify` | backend, audit | `AuditEntry[]` · `{intact, checked, firstBrokenId}` |
 | `GET /api/v1/reports/summary?from=&to=&location=` and `.csv` / `.pdf` | backend, analytics + alerts | `ReportSummary`, files (OpenPDF) |
-| `GET /api/v1/profiles` · `GET /api/v1/admin/users` | backend | config |
+| `GET /api/v1/profiles` | backend | config |
+| `GET /api/v1/admin/users` · `POST /api/v1/admin/users/{id}/unlock` · `PATCH /api/v1/admin/users/{id} {role}` | backend, auth (decision 1) | `User[]` · `User`; admins only. 409 `ROLE_CHANGE_REFUSED` for self-demotion or the last admin. Audited as `ACCOUNT_UNLOCKED`, `USER_ROLE_CHANGED` (`oldRole`, `newRole`) |
 | `GET /api/v1/health/sensors` · `/api/v1/health/sensors/{id}?minutes=` · `/api/v1/health/events` · `/api/v1/health/services` | platform | sensor health |
 | `GET /api/v1/sensors` · `POST /api/v1/admin/sensors` · `POST /api/v1/admin/sensors/{deviceId}/rotate-secret` | platform | device registry; secret returned once |
 | `PATCH /api/v1/admin/sensors/{id} {expectedIntervalS}` | platform | admin only; `id` is `sensors.id`; 5-3600 s, else 400; returns the `Device`; audited `SENSOR_INTERVAL_CHANGED` (actor = admin, entity `sensor`/deviceId, details `{sensorId, fromSeconds, toSeconds}`); sensor health and the embedded simulator use the new value at once |

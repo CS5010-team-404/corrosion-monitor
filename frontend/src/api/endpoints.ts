@@ -25,7 +25,6 @@ const pending = (key: string, what: string, endpoint: string, owner: string): Pe
 export const PENDING = {
   assessments: pending("assessments", "Equipment history", "GET /api/v1/equipment/{id}/assessments", "Aayushee"),
   profiles: pending("profiles", "Equipment profiles", "GET /api/v1/profiles", "team"),
-  users: pending("users", "The user list", "GET /api/v1/admin/users", "team"),
 } as const;
 
 // The picker's `to` is the start of the last chosen day; the backend's period is [from, to), so send the end of that day.
@@ -80,4 +79,8 @@ export const reportFile = (kind: "csv" | "pdf", from: number | null, to: number 
 
 // configuration (team)
 export const profiles = () => api<T.Profile[]>("/api/v1/profiles", {}, PENDING.profiles);
-export const users = () => api<T.User[]>("/api/v1/admin/users", {}, PENDING.users);
+
+// users (admin only; team backend)
+export const users = () => api<T.User[]>("/api/v1/admin/users");
+export const unlockUser = (id: number) => post<T.User>(`/api/v1/admin/users/${id}/unlock`);
+export const setUserRole = (id: number, role: T.Role) => patch<T.User>(`/api/v1/admin/users/${id}`, { role });

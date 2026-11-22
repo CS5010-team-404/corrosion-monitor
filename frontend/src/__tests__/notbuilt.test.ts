@@ -30,7 +30,7 @@ describe("endpoints that aren't built yet", () => {
 
   it("treats 501 the same way", async () => {
     fetchMock.mockResolvedValue(respond(501));
-    await expect(users()).rejects.toMatchObject({ status: 501, pending: PENDING.users });
+    await expect(profiles()).rejects.toMatchObject({ status: 501, pending: PENDING.profiles });
   });
 
   it("never treats a real (platform) endpoint's 404 as not built, and never falls back for it", async () => {
@@ -65,6 +65,16 @@ describe("endpoints that aren't built yet", () => {
     expect(err).toBeInstanceOf(ApiError);
     expect(err).not.toBeInstanceOf(NotBuiltError);
     expect(err.message).toBe("Alert 99 not found.");
+  });
+
+  it("treats the admin user list as built: a 404 is a real error, never sample data", async () => {
+    config.mockFallback = true;
+    fetchMock.mockResolvedValue(respond(404, { message: "No such path" }));
+    const err = await users().catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).not.toBeInstanceOf(NotBuiltError);
+    expect(isSample(err)).toBe(false);
+    expect(PENDING).not.toHaveProperty("users");
   });
 
   it("keeps real data unmarked", async () => {

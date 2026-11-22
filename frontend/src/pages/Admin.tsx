@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { devices, equipmentStatus, profiles, registerDevice, scenarios, setScenario, setSensorInterval, simulator, users } from "../api/endpoints";
+import { devices, equipmentStatus, profiles, registerDevice, scenarios, setScenario, setSensorInterval, setUserRole, simulator, unlockUser, users } from "../api/endpoints";
 import type * as T from "../api/types";
 import { Dropdown } from "../components/Dropdown";
 import { Icon } from "../components/Icon";
 import { Badge, Button, Empty, ErrorState, Modal, PageHead, PageSkeleton, Tabs } from "../components/ui";
 import { errorMessage } from "../lib/api";
+import { useAuth } from "../lib/auth";
 import { ago, label } from "../lib/format";
 import { INTERVAL_MAX_S, INTERVAL_MIN_S, intervalLabel, intervalProblem } from "../lib/sensors";
 import { useRouter } from "../lib/router";
@@ -153,18 +154,60 @@ function ProfilesTab() {
   );
 }
 
-function UsersTab() {
+const ROLES: T.Role[] = ["TECHNICIAN", "OPERATOR", "MANAGER", "ADMIN"];
+
+export function UsersTab() {
   const u = useAsync(users, []);
+  const toast = useToast();
+  const { session } = useAuth();
+  const [change, setChange] = useState<{ user: T.User; role: T.Role } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [unlocking, setUnlocking] = useState<number | null>(null);
+  const isMe = (x: T.User) => !!session && session.username.toLowerCase() === (x.email ?? x.username).toLowerCase();
+
+  const saveRole = async () => {
+    if (!change) return;
+    setSaving(true);
+    try {
+      await setUserRole(change.user.id, change.role);
+      toast(`${change.user.fullName} is now ${label(change.role).toLowerCase()}`);
+      setChange(null);
+      u.reload();
+    } catch (e) { toast(errorMessage(e), true); } finally { setSaving(false); }
+  };
+  const unlock = async (x: T.User) => {
+    setUnlocking(x.id);
+    try {
+      await unlockUser(x.id);
+      toast(`${x.fullName} can sign in again`);
+      u.reload();
+    } catch (e) { toast(errorMessage(e), true); } finally { setUnlocking(null); }
+  };
+
   if (u.loading) return <PageSkeleton table />;
   if (u.error) return <ErrorState error={u.error} onRetry={u.reload} />;
+  if (!u.data?.length) return <div className="card"><Empty icon="user" title="No users yet" text="Accounts appear here once they exist in the team backend." /></div>;
   return (
-    <div className="card flush"><div className="table-wrap"><table className="dt"><thead><tr><th>User</th><th style={{ width: 220 }}>Role</th><th>Last sign-in</th><th>Status</th></tr></thead><tbody>
-      {(u.data ?? []).map((x) => (
-        <tr key={x.id}><td><div className="row" style={{ gap: 12, flexWrap: "nowrap" }}><span className="avatar sm">{x.fullName[0]}</span><div><div className="cell-main">{x.fullName}</div><div className="cell-sub">{x.username}</div></div></div></td>
-          {/* Read-only until the team backend has a role-change API (J4); a dropdown that saves nothing would mislead. */}
-          <td>{label(x.role)}</td>
-          <td className="num small">{ago(x.lastLoginAt)}</td><td>{x.lockedUntil ? <Badge value="CRITICAL" text="Locked" /> : x.enabled ? <Badge value="HEALTHY" text="Active" /> : <Badge text="Disabled" />}</td></tr>
-      ))}
-    </tbody></table></div></div>
+    <>
+      <div className="card flush"><div className="table-wrap"><table className="dt"><thead><tr><th>User</th><th style={{ width: 220 }}>Role</th><th>Last sign-in</th><th>Status</th></tr></thead><tbody>
+        {u.data.map((x) => (
+          <tr key={x.id}><td><div className="row" style={{ gap: 12, flexWrap: "nowrap" }}><span className="avatar sm">{x.fullName[0]}</span><div><div className="cell-main">{x.fullName}</div><div className="cell-sub">{x.username}</div></div></div></td>
+            <td>{isMe(x)
+              ? <span title="Ask another administrator to change your role">{label(x.role)} <span className="cell-sub">(you)</span></span>
+              : <Dropdown block value={x.role} ariaLabel={`Role for ${x.fullName}`} onChange={(role) => role !== x.role && setChange({ user: x, role })} options={ROLES.map((r) => ({ value: r, label: label(r) }))} />}</td>
+            <td className="num small">{x.lastLoginAt ? ago(x.lastLoginAt) : "Never"}</td>
+            <td><div className="row" style={{ gap: 10, flexWrap: "nowrap" }}>
+              {x.lockedUntil ? <Badge value="CRITICAL" text="Locked" /> : x.enabled ? <Badge value="HEALTHY" text="Active" /> : <Badge text="Disabled" />}
+              {x.lockedUntil && <Button size="sm" busy={unlocking === x.id} disabled={unlocking !== null} onClick={() => unlock(x)}>Unlock</Button>}
+            </div></td></tr>
+        ))}
+      </tbody></table></div></div>
+      {change && (
+        <Modal title="Change role?" sub={`${change.user.fullName}: ${label(change.user.role)} to ${label(change.role)}.`} onClose={() => !saving && setChange(null)}
+          footer={<><Button variant="ghost" disabled={saving} onClick={() => setChange(null)}>Cancel</Button><Button variant="primary" busy={saving} onClick={saveRole}>Change role</Button></>}>
+          <p className="small muted" style={{ margin: 0 }}>The new role applies from their next sign-in. A session that is already open keeps the old role until it expires (up to 8 hours).</p>
+        </Modal>
+      )}
+    </>
   );
 }

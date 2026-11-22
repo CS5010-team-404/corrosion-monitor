@@ -52,6 +52,14 @@ public class AppUser {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    // V9
+    @Column(nullable = false)
+    private boolean enabled = true;
+
+    @JdbcTypeCode(SqlTypes.TIMESTAMP)
+    @Column(name = "last_login_at")
+    private Instant lastLoginAt;
+
     protected AppUser() {
     }
 
@@ -81,6 +89,22 @@ public class AppUser {
 
     public Role getRole() {
         return role;
+    }
+
+    public boolean isEnabled() {
+        return enabled;
+    }
+
+    public Instant getLastLoginAt() {
+        return lastLoginAt;
+    }
+
+    public void recordLogin(Instant at) {
+        this.lastLoginAt = at;
+    }
+
+    public void changeRole(Role role) {
+        this.role = role;
     }
 
     public LoginPolicy.State loginState() {
