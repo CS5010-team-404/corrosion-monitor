@@ -21,7 +21,8 @@ import java.util.Map;
  *
  * <pre>
  *   mvn -q -pl ecp-forecast -am exec:java -Dexec.args="--out ecp-forecast/src/main/resources/models"
- *   ... --uci energydata_complete.csv      also evaluates on real UCI room data (rooms 1-9)
+ * Real-data evaluation (UCI rooms) is a separate run: {@code edu.neu.ecp.forecast.eval.RealDataEvaluation},
+ * via {@code scripts/evaluate-real-data.sh}.
  * </pre>
  *
  * Evaluation is honest: chronological per-run split, unseen simulator seeds for testing, and two baselines
@@ -37,13 +38,11 @@ public final class Trainer {
 
     public static void main(String[] args) throws IOException {
         Path out = Path.of("models");
-        Path uci = null;
         int trainRuns = 240;
         int testRuns = 60;
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
                 case "--out" -> out = Path.of(args[++i]);
-                case "--uci" -> uci = Path.of(args[++i]);
                 case "--train-runs" -> trainRuns = Integer.parseInt(args[++i]);
                 case "--test-runs" -> testRuns = Integer.parseInt(args[++i]);
                 default -> throw new IllegalArgumentException("unknown option " + args[i]);
@@ -52,9 +51,6 @@ public final class Trainer {
         Files.createDirectories(out);
         Result r = train(trainRuns, testRuns, 8);
         StringBuilder report = new StringBuilder(r.report());
-        if (uci != null) {
-            report.append(evaluateUci(r.forecaster(), uci));
-        }
         Files.writeString(out.resolve("margin-forecast.json"), ModelIO.toJson(r.forecaster()));
         Files.writeString(out.resolve("margin-forecast-report.md"), report);
         System.out.println(report);
@@ -189,7 +185,7 @@ public final class Trainer {
            .append(String.format(Locale.ROOT, "| Model (60-min classifier or forecast) | %.0f min | %.0f%% | %.1f |%n", lead[0], 100 * lead[2], lead[4]))
            .append(String.format(Locale.ROOT, "| Rule: margin ≤ 3 °C | %.0f min | %.0f%% | %.1f |%n", lead[1], 100 * lead[3], lead[5]));
         rep.append("\nWeights (standardised features) are in the model file. Simulated data cannot prove real-world\n")
-           .append("accuracy; run with `--uci energydata_complete.csv` to check on real room humidity as well.\n");
+           .append("accuracy; scripts/evaluate-real-data.sh evaluates on real rooms (docs/ml-training-report.md).\n");
         String version = "ridge-" + LocalDate.now() + "-s" + trainRuns;
         metrics.put("trained_on", trainRuns + " simulated runs");
         return new Result(new MarginForecaster(version, models, classifiers, metrics), rep.toString());
@@ -363,23 +359,6 @@ public final class Trainer {
             s += Math.abs(y[i] - m.predict(d.x().get(i)));
         }
         return s / y.length;
-    }
-
-    static String evaluateUci(MarginForecaster f, Path csv) throws IOException {
-        StringBuilder rep = new StringBuilder("\n## Real data check: UCI Appliances Energy Prediction\n\n")
-                .append("Surface assumed 2 °C below air. MAE of the predicted margin change.\n\n")
-                .append("| Room | Points | MAE 60 min model | MAE 60 min no-change |\n|---|---|---|---|\n");
-        for (int room = 1; room <= 9; room++) {
-            Dataset d = build(List.of(UciLoader.room(csv, room, 2.0)), 10);
-            double model = mae(f.models().get(60), d, 60);
-            double persist = 0;
-            for (double v : d.dy().get(60)) {
-                persist += Math.abs(v);
-            }
-            persist /= d.dy().get(60).length;
-            rep.append(String.format(Locale.ROOT, "| %d | %d | %.3f °C | %.3f °C |%n", room, d.x().size(), model, persist));
-        }
-        return rep.toString();
     }
 
     private static double round(double v) {

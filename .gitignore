@@ -40,3 +40,6 @@ node_modules/
 # Local run (scripts/run-local.sh): generated local-only secrets, logs and pids
 .env.local
 .run/
+
+# Local datasets (never committed; see docs/ml-training-report.md)
+data/
