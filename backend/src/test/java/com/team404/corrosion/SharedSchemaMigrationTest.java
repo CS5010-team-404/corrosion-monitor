@@ -2,6 +2,7 @@ package com.team404.corrosion;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -11,6 +12,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Stream;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -37,7 +39,7 @@ class SharedSchemaMigrationTest {
             "alert_signals", "audit_outbox",
             // platform
             "sensors", "readings", "ingest_rejections", "sensor_health", "sensor_health_events",
-            "service_heartbeats", "job_cursors",
+            "service_heartbeats", "job_cursors", "sensor_forecasts",
             // history
             "flyway_schema_history", "flyway_platform_history");
 
@@ -59,19 +61,26 @@ class SharedSchemaMigrationTest {
     }
 
     @Test
-    void backendThenPlatform() throws SQLException {
+    void backendThenPlatform() throws SQLException, IOException {
         String db = "backend_first";
         assertThat(backend(db).migrate().migrationsExecuted).isGreaterThanOrEqualTo(2);
-        assertThat(platform(db).migrate().migrationsExecuted).isEqualTo(1);
+        assertThat(platform(db).migrate().migrationsExecuted).isEqualTo(platformMigrations());
         assertSharedSchema(db);
     }
 
     @Test
-    void platformThenBackend() throws SQLException {
+    void platformThenBackend() throws SQLException, IOException {
         String db = "platform_first";
-        assertThat(platform(db).migrate().migrationsExecuted).isEqualTo(1);
+        assertThat(platform(db).migrate().migrationsExecuted).isEqualTo(platformMigrations());
         assertThat(backend(db).migrate().migrationsExecuted).isGreaterThanOrEqualTo(2);
         assertSharedSchema(db);
+    }
+
+    /** Number of platform migration files (V1, V2, ...); a new one must not need a change here. */
+    private static int platformMigrations() throws IOException {
+        try (Stream<Path> files = Files.list(PLATFORM_MIGRATIONS)) {
+            return (int) files.filter(f -> f.getFileName().toString().matches("V\\d+__.*\\.sql")).count();
+        }
     }
 
     private static void assertSharedSchema(String db) throws SQLException {

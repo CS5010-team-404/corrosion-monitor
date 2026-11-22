@@ -34,7 +34,7 @@ function status(e: any): T.EquipmentStatus {
 function health(e: any): T.SensorHealth {
   const h = S.health[e.dev];
   const conn = h.issues.includes("OFFLINE") ? "OFFLINE" : "ONLINE";
-  return { sensorId: sensorIdOf(e), deviceId: e.dev, kind: "SIMULATED", model: "SIM-SHT31", expectedIntervalSeconds: 15, equipmentId: e.id,
+  return { sensorId: sensorIdOf(e), deviceId: e.dev, kind: "SIMULATED", model: "SIM-SHT31", expectedIntervalSeconds: e.intervalS ?? 15, equipmentId: e.id,
     equipmentName: e.name, locationName: e.loc, status: h.status, connectivity: conn, score: h.score, trusted: h.trusted, issues: h.issues,
     lastSeenAt: iso(h.lastSeen), missingPct: h.missing, signatureFailures: h.issues.includes("SIGNATURE_FAILURES") ? 5 : 0, statusSince: null };
 }
@@ -104,12 +104,23 @@ async function handle(path: string, init: RequestInit): Promise<unknown> {
   }
   if (p === "/api/v1/health/events") return S.events.slice(0, +(qp.get("limit") || 50)).map(eventView);
   if (p === "/api/v1/health/services") return S.services.map((s: any) => ({ service: s.name, state: s.state, lastRunAt: iso(sim.now() - 2000), lastError: null, errorCount: 0 }));
-  if (p === "/api/v1/sensors") return S.eq.map((e: any) => ({ id: sensorIdOf(e), deviceId: e.dev, kind: "SIMULATED", model: "SIM-SHT31", expectedIntervalS: 15, active: true, equipmentId: e.id, equipmentName: e.name, locationName: e.loc }));
+  const device = (e: any): T.Device => ({ id: sensorIdOf(e), deviceId: e.dev, kind: "SIMULATED", model: "SIM-SHT31", expectedIntervalS: e.intervalS ?? 15, active: true, equipmentId: e.id, equipmentName: e.name, locationName: e.loc });
+  if (p === "/api/v1/sensors") return S.eq.map(device);
+  if ((m = p.match(/^\/api\/v1\/admin\/sensors\/(\d+)$/)) && method === "PATCH") {
+    // Same rules as the platform: admins only, whole seconds from 5 to 3600, audited when it changes.
+    if (role() !== "ADMIN") throw new ApiError(403, "Forbidden");
+    const e = S.eq[+m[1] - 1];
+    if (!e) throw new ApiError(404, `No sensor ${m[1]}`);
+    const n = body.expectedIntervalS;
+    if (!Number.isInteger(n) || n < 5 || n > 3600) throw new ApiError(400, "expectedIntervalS must be between 5 and 3600 seconds");
+    if (n !== (e.intervalS ?? 15)) { e.intervalS = n; sim.addAudit(actor(), "SENSOR_INTERVAL_CHANGED", "sensor", e.dev); }
+    return device(e);
+  }
   if (p === "/api/v1/admin/sensors" && method === "POST") {
     sim.addAudit(actor(), "SENSOR_REGISTERED", "sensor", body.deviceId);
     return { deviceId: body.deviceId, secret: Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"[b % 64]).join("") };
   }
-  if (p === "/api/v1/admin/simulator") return S.eq.map((e: any) => ({ deviceId: e.dev, scenario: e.scenario, intervalSeconds: 15, lastHttpStatus: 202, sent: 0, failed: 0 }));
+  if (p === "/api/v1/admin/simulator") return S.eq.map((e: any) => ({ deviceId: e.dev, scenario: e.scenario, intervalSeconds: e.intervalS ?? 15, lastHttpStatus: 202, sent: 0, failed: 0 }));
   if (p === "/api/v1/admin/simulator/scenarios") return sim.SCENARIOS.map(([name, description]: string[]) => ({ name, description }));
   if ((m = p.match(/^\/api\/v1\/admin\/simulator\/([^/]+)\/scenario$/))) {
     const e = S.eq.find((x: any) => x.dev === decodeURIComponent(m![1])); e.scenario = body.scenario; e.since = sim.now();

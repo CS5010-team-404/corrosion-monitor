@@ -84,6 +84,11 @@ public class EmbeddedSimulator {
         return engine().map(x -> x.setScenario(deviceId, scenario)).orElse(false);
     }
 
+    /** Applies an edited reporting interval to a running simulated device. False if it is not simulated here. */
+    public boolean setInterval(String deviceId, Duration interval) {
+        return engine().map(x -> x.setInterval(deviceId, interval)).orElse(false);
+    }
+
     @PreDestroy
     public void stop() {
         if (engine != null) {
