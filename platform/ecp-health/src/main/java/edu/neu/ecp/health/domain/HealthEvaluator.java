@@ -32,6 +32,13 @@ public final class HealthEvaluator {
         List<ReadingSample> window = o.window();
 
         Connectivity connectivity = connectivity(o);
+        Set<HealthIssue> undecided = EnumSet.noneOf(HealthIssue.class);
+        if (connectivity == Connectivity.OFFLINE && inStartupGrace(o)) {
+            // The silence may only be the platform's own downtime: give devices time to reconnect, and neither
+            // raise a new OFFLINE nor clear one that was open before the restart.
+            undecided.add(HealthIssue.OFFLINE);
+            connectivity = o.lastSeenAt() == null ? Connectivity.NEVER_SEEN : Connectivity.LATE;
+        }
         if (connectivity == Connectivity.OFFLINE) {
             detected.add(HealthIssue.OFFLINE);
             Duration silentFor = o.lastSeenAt() == null
@@ -101,10 +108,16 @@ public final class HealthEvaluator {
                 newest == null ? null : newest.seqNo(),
                 newest == null ? null : newest.measuredAt());
 
-        return new Evaluation(o.sensor().sensorId(), connectivity, detected, evidence, metrics, o.now());
+        return new Evaluation(o.sensor().sensorId(), connectivity, detected, evidence, metrics, o.now(), undecided);
     }
 
     // ---------------------------------------------------------------- rules
+
+    /** True while the platform has been up for less than {@link HealthPolicy#startupGrace()}. */
+    boolean inStartupGrace(Observation o) {
+        return o.serviceStartedAt() != null
+                && Duration.between(o.serviceStartedAt(), o.now()).compareTo(policy.startupGrace()) < 0;
+    }
 
     Connectivity connectivity(Observation o) {
         if (o.lastSeenAt() == null) {

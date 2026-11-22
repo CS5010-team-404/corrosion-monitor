@@ -136,6 +136,8 @@ export async function api<T>(path: string, init: RequestInit = {}, pending?: Pen
 export const post = <T>(path: string, body?: unknown, pending?: Pending) =>
   api<T>(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) }, pending);
 
+export const patch = <T>(path: string, body: unknown) => api<T>(path, { method: "PATCH", body: JSON.stringify(body) });
+
 /** Saves a Blob as a file download. */
 export function saveBlob(blob: Blob, name: string) {
   const a = document.createElement("a");

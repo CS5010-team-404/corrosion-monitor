@@ -42,24 +42,32 @@ Single reading from a sensor.
 ### POST /api/v1/readings/batch
 Replay of buffered readings after an outage. Body: `{"sensorId": "...", "readings": [ ... up to 500 items ... ]}`. Same headers; signature covers the whole raw body. Response lists accepted and rejected `seq` values.
 
-## 2. Dashboard and operations (JWT or session, role-checked)
+## 2. Dashboard and operations (JWT, role-checked)
+
+Four roles (decision 4 in `DECISIONS.md`): `TECHNICIAN`, `OPERATOR`, `MANAGER`, `ADMIN`. There is no Auditor role.
+Everyone signed in can read dashboards and alerts; technicians and admins act on alerts (acknowledge, resolve, log
+corrective actions); managers and admins see reports and the audit log; admins configure users, sensors and profiles.
+`docs/CONTRACTS.md` is the up-to-date list of paths and shapes; this table follows it.
 
 | Method | Path | Roles | Purpose |
 |---|---|---|---|
-| POST | /api/v1/auth/login | all | Login, returns token |
-| GET | /api/v1/locations | Admin, Operator, Auditor | List monitored locations with current status |
-| GET | /api/v1/locations/{id} | same | Detail: latest reading, dew-point margin, risk score, forecast |
-| GET | /api/v1/locations/{id}/readings?from=&to=&resolution= | same | Time series for charts |
-| GET | /api/v1/locations/{id}/forecast | same | Predicted values for 15/30/60 min |
-| GET | /api/v1/alerts?status=&severity= | same | List alerts |
-| POST | /api/v1/alerts/{id}/ack | Admin, Operator | Acknowledge, body: `{"note": "..."}` |
-| POST | /api/v1/alerts/{id}/actions | Admin, Operator | Log corrective action |
+| POST | /api/v1/auth/login | all | Login `{email, password}`, returns `{token, expiresAt, email, fullName, role}` |
+| GET | /api/v1/locations | all signed in | List monitored locations with current status |
+| GET | /api/v1/locations/{id} | all signed in | Detail: latest reading, dew-point margin, risk score, forecast |
+| GET | /api/v1/locations/{id}/readings?from=&to=&resolution= | all signed in | Time series for charts |
+| GET | /api/v1/locations/{id}/forecast | all signed in | Predicted values for 15/30/60 min |
+| GET | /api/v1/alerts?status=ALL\|ACTIVE\|OPEN\|ACKNOWLEDGED\|RESOLVED&limit= | all signed in | List alerts |
+| GET | /api/v1/alerts/{id} | all signed in | `{alert, actions}` |
+| POST | /api/v1/alerts/{id}/acknowledge | Technician, Admin | Acknowledge an OPEN alert (no body); 409 in any other state |
+| POST | /api/v1/alerts/{id}/resolve | Technician, Admin | Resolve, optional body `{"notes": "..."}` (saved as a `RESOLVED` corrective action) |
+| POST | /api/v1/alerts/{id}/actions | Technician, Admin | Log corrective action `{"actionType": "...", "notes": "..."}` |
 | GET | /api/v1/sensors | Admin | List sensors and health |
 | POST | /api/v1/sensors | Admin | Register sensor, returns secret once |
 | PUT | /api/v1/profiles/{id} | Admin | Change thresholds |
-| GET | /api/v1/audit?from=&to=&user=&type= | Admin, Auditor | Query audit log |
-| POST | /api/v1/audit/verify | Admin, Auditor | Verify hash chain |
-| GET | /api/v1/reports?from=&to=&format=csv\|pdf | Admin, Auditor | Export report |
+| GET | /api/v1/audit?size=&page=&actor=&action= | Manager, Admin | Query audit log |
+| POST | /api/v1/audit/verify | Admin | Verify hash chain |
+| GET | /api/v1/reports/summary?from=&to=&location= | Manager, Admin | Report summary (JSON); period `[from, to)` as ISO-8601 instants, either optional |
+| GET | /api/v1/reports/summary.csv · /summary.pdf | Manager, Admin | Same numbers as a CSV (one row per metric) or PDF file |
 
 ## 3. Object shapes
 
@@ -82,15 +90,27 @@ Replay of buffered readings after an outage. Body: `{"sensorId": "...", "reading
 ```json
 {
   "id": 77,
-  "locationId": 3,
-  "type": "CONDENSATION_FORECAST",
-  "severity": "WARNING",
+  "type": "CONDENSATION_RISK",
+  "source": "ANALYTICS",
+  "severity": "CRITICAL",
+  "status": "ACKNOWLEDGED",
+  "escalationLevel": 1,
+  "equipmentId": 4,
+  "equipmentName": "Rack A1",
+  "locationName": "Server Room A",
+  "sensorId": 2,
+  "deviceId": "SIM-002",
+  "title": "Condensation risk: Rack A1, Server Room A",
+  "message": "Dew-point margin is 0.4°C",
   "openedAt": "2026-11-03T02:16:00Z",
-  "message": "Dew-point margin is 2.1°C at +30 min and shrinking",
-  "status": "OPEN",
-  "acknowledgedBy": null
+  "acknowledgedAt": "2026-11-03T02:20:11Z",
+  "acknowledgedBy": "Tara Tech",
+  "resolvedAt": null,
+  "resolvedBy": null,
+  "conditionClearedAt": null
 }
 ```
+Status: `OPEN` → `ACKNOWLEDGED` → `RESOLVED` (an OPEN alert may be resolved directly). Severity: `WARNING`, `CRITICAL`.
 Alert types: `HUMIDITY_HIGH`, `CONDENSATION_RISK`, `CONDENSATION_FORECAST`, `RISK_BUDGET_EXCEEDED`, `SENSOR_SILENT`, `SENSOR_STUCK`, `SENSOR_IMPLAUSIBLE`.
 
 **Audit entry**

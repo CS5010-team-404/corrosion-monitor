@@ -34,7 +34,7 @@ function status(e: any): T.EquipmentStatus {
 function health(e: any): T.SensorHealth {
   const h = S.health[e.dev];
   const conn = h.issues.includes("OFFLINE") ? "OFFLINE" : "ONLINE";
-  return { sensorId: sensorIdOf(e), deviceId: e.dev, kind: "SIMULATED", model: "SIM-SHT31", expectedIntervalSeconds: 15, equipmentId: e.id,
+  return { sensorId: sensorIdOf(e), deviceId: e.dev, kind: "SIMULATED", model: "SIM-SHT31", expectedIntervalSeconds: e.intervalS ?? 15, equipmentId: e.id,
     equipmentName: e.name, locationName: e.loc, status: h.status, connectivity: conn, score: h.score, trusted: h.trusted, issues: h.issues,
     lastSeenAt: iso(h.lastSeen), missingPct: h.missing, signatureFailures: h.issues.includes("SIGNATURE_FAILURES") ? 5 : 0, statusSince: null };
 }
@@ -53,7 +53,7 @@ const actor = () => ({ ADMIN: "admin", MANAGER: "manager", OPERATOR: "operator",
 
 function levels(from: number | null, to: number | null, loc: string | null) {
   return S.eq.filter((e: any) => !loc || e.loc === loc).map((e: any) => {
-    const pts = e.hist.filter((x: any) => (!from || x.ts >= from) && (!to || x.ts <= to + 86400000));
+    const pts = e.hist.filter((x: any) => (!from || x.ts >= from) && (!to || x.ts < to));
     let ok = 0, w = 0, c = 0;
     pts.forEach((x: any) => { const m = x.surface - x.dew; if (m <= e.prof.mCrit || x.rh >= e.prof.rhCrit) c++; else if (m <= e.prof.mWarn || x.rh >= e.prof.rhWarn) w++; else ok++; });
     const n = Math.max(1, pts.length);
@@ -104,12 +104,23 @@ async function handle(path: string, init: RequestInit): Promise<unknown> {
   }
   if (p === "/api/v1/health/events") return S.events.slice(0, +(qp.get("limit") || 50)).map(eventView);
   if (p === "/api/v1/health/services") return S.services.map((s: any) => ({ service: s.name, state: s.state, lastRunAt: iso(sim.now() - 2000), lastError: null, errorCount: 0 }));
-  if (p === "/api/v1/sensors") return S.eq.map((e: any) => ({ id: sensorIdOf(e), deviceId: e.dev, kind: "SIMULATED", model: "SIM-SHT31", expectedIntervalS: 15, active: true, equipmentId: e.id, equipmentName: e.name, locationName: e.loc }));
+  const device = (e: any): T.Device => ({ id: sensorIdOf(e), deviceId: e.dev, kind: "SIMULATED", model: "SIM-SHT31", expectedIntervalS: e.intervalS ?? 15, active: true, equipmentId: e.id, equipmentName: e.name, locationName: e.loc });
+  if (p === "/api/v1/sensors") return S.eq.map(device);
+  if ((m = p.match(/^\/api\/v1\/admin\/sensors\/(\d+)$/)) && method === "PATCH") {
+    // Same rules as the platform: admins only, whole seconds from 5 to 3600, audited when it changes.
+    if (role() !== "ADMIN") throw new ApiError(403, "Forbidden");
+    const e = S.eq[+m[1] - 1];
+    if (!e) throw new ApiError(404, `No sensor ${m[1]}`);
+    const n = body.expectedIntervalS;
+    if (!Number.isInteger(n) || n < 5 || n > 3600) throw new ApiError(400, "expectedIntervalS must be between 5 and 3600 seconds");
+    if (n !== (e.intervalS ?? 15)) { e.intervalS = n; sim.addAudit(actor(), "SENSOR_INTERVAL_CHANGED", "sensor", e.dev); }
+    return device(e);
+  }
   if (p === "/api/v1/admin/sensors" && method === "POST") {
     sim.addAudit(actor(), "SENSOR_REGISTERED", "sensor", body.deviceId);
     return { deviceId: body.deviceId, secret: Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"[b % 64]).join("") };
   }
-  if (p === "/api/v1/admin/simulator") return S.eq.map((e: any) => ({ deviceId: e.dev, scenario: e.scenario, intervalSeconds: 15, lastHttpStatus: 202, sent: 0, failed: 0 }));
+  if (p === "/api/v1/admin/simulator") return S.eq.map((e: any) => ({ deviceId: e.dev, scenario: e.scenario, intervalSeconds: e.intervalS ?? 15, lastHttpStatus: 202, sent: 0, failed: 0 }));
   if (p === "/api/v1/admin/simulator/scenarios") return sim.SCENARIOS.map(([name, description]: string[]) => ({ name, description }));
   if ((m = p.match(/^\/api\/v1\/admin\/simulator\/([^/]+)\/scenario$/))) {
     const e = S.eq.find((x: any) => x.dev === decodeURIComponent(m![1])); e.scenario = body.scenario; e.since = sim.now();
@@ -124,13 +135,21 @@ async function handle(path: string, init: RequestInit): Promise<unknown> {
     if (m[2] === "actions") { a.actions.push({ type: body.actionType, notes: body.notes, by: who, at: sim.now() }); sim.addAudit(who, "CORRECTIVE_ACTION_LOGGED", "alert", a.id); return actionView(a.actions[a.actions.length - 1]); }
     return alertView(a);
   }
-  if (p === "/api/v1/audit") return S.audit.map((a: any) => ({ id: a.id, occurredAt: iso(a.at), actorType: ["alerts", "sensor-health"].includes(a.actor) ? "SYSTEM" : "USER", actor: a.actor, action: a.action, entityType: a.entity, entityId: String(a.entityId), prevHash: a.prev, hash: S.tampered && a === S.audit[12] ? "e" + a.hash.slice(1) : a.hash }));
+  const auditView = (a: any) => ({ id: a.id, occurredAt: iso(a.at), actorType: ["alerts", "sensor-health"].includes(a.actor) ? "SYSTEM" : "USER", actor: a.actor, action: a.action, entityType: a.entity, entityId: String(a.entityId), prevHash: a.prev, hash: S.tampered && a === S.audit[12] ? "e" + a.hash.slice(1) : a.hash });
+  if (p === "/api/v1/audit") {
+    // The agreed paged shape { items, page, size, total }, newest first, with the backend's filters (exact actor, from/to).
+    const page = Math.max(0, +(qp.get("page") ?? 0)), size = Math.min(200, Math.max(1, +(qp.get("size") ?? 50)));
+    const from = qp.get("from") ? Date.parse(qp.get("from")!) : null, to = qp.get("to") ? Date.parse(qp.get("to")!) : null;
+    const all = [...S.audit].filter((a: any) => (!qp.get("actor") || a.actor === qp.get("actor")) && (from == null || a.at >= from) && (to == null || a.at < to))
+      .sort((x: any, y: any) => y.id - x.id);
+    return { items: all.slice(page * size, page * size + size).map(auditView), page, size, total: all.length };
+  }
   if (p === "/api/v1/audit/verify") { await wait(900); return S.tampered ? { intact: false, checked: S.audit.length, firstBrokenId: S.audit[12].id } : { intact: true, checked: S.audit.length, firstBrokenId: null }; }
   if (p === "/api/v1/mock/tamper") { S.tampered = !!body.on; return { tampered: S.tampered }; }
   if (p === "/api/v1/reports/summary" || p === "/api/v1/reports/summary.csv" || p === "/api/v1/reports/summary.pdf") {
     const from = qp.get("from") ? Date.parse(qp.get("from")!) : null, to = qp.get("to") ? Date.parse(qp.get("to")!) : null, loc = qp.get("location");
     const eqIds = new Set(S.eq.filter((e: any) => !loc || e.loc === loc).map((e: any) => e.id));
-    const al = S.alerts.filter((a: any) => eqIds.has(a.eqId) && (!from || a.opened >= from) && (!to || a.opened < to + 86400000));
+    const al = S.alerts.filter((a: any) => eqIds.has(a.eqId) && (!from || a.opened >= from) && (!to || a.opened < to));
     const acked = al.filter((a: any) => a.ack);
     const summary: T.ReportSummary = { from: iso(from), to: iso(to), alertsOpened: al.length, meanMinutesToAcknowledge: acked.length ? acked.reduce((s: number, a: any) => s + (a.ack - a.opened), 0) / acked.length / 60000 : null,
       correctiveActions: al.reduce((s: number, a: any) => s + a.actions.length, 0), equipment: levels(from, to, loc) };

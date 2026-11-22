@@ -62,9 +62,18 @@ public class EscalationJob {
             }));
             if (done) {
                 escalated++;
-                alerts.find(id).ifPresent(a -> notifier.escalated(a, alerts.managerEmails()));
+                notify(id);
             }
         }
         return escalated;
+    }
+
+    /** Best effort: the escalation is saved, so a failed email must not stop the alerts after this one. */
+    private void notify(long id) {
+        try {
+            alerts.find(id).ifPresent(a -> notifier.escalated(a, alerts.managerEmails()));
+        } catch (RuntimeException e) {
+            log.warn("Alert {} escalated but the managers could not be notified: {}", id, e.toString());
+        }
     }
 }

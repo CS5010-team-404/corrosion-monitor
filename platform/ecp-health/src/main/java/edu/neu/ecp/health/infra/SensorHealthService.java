@@ -45,6 +45,8 @@ public class SensorHealthService {
     private final TransactionTemplate tx;
     private final HealthQueries queries;
     private final Map<Long, EpisodeTracker> trackers = new ConcurrentHashMap<>();
+    /** When this platform instance started; OFFLINE waits for {@code ecp.health.startup-grace} after it. */
+    private final Instant startedAt;
 
     public SensorHealthService(HealthEvaluator evaluator, HealthRepository repository, SignalPublisher signals,
                                AuditRecorder audit, LiveUpdates live, Clock clock, TransactionTemplate tx,
@@ -57,6 +59,7 @@ public class SensorHealthService {
         this.clock = clock;
         this.tx = tx;
         this.queries = queries;
+        this.startedAt = clock.instant();
     }
 
     public List<HealthAssessment> evaluateAll() {
@@ -75,11 +78,12 @@ public class SensorHealthService {
             Instant lastSeen = lastSeen(sensor, window, previous);
             int sigFailures = failures.getOrDefault(sensor.deviceId(), 0);
 
-            Evaluation evaluation = evaluator.evaluate(new Observation(sensor, window, lastSeen, sigFailures, now));
+            Evaluation evaluation = evaluator.evaluate(new Observation(sensor, window, lastSeen, sigFailures, now,
+                    startedAt));
             Map<HealthIssue, Long> openForSensor = open.getOrDefault(sensor.sensorId(), Map.of());
             EpisodeTracker tracker = trackers.computeIfAbsent(sensor.sensorId(),
                     id -> new EpisodeTracker(evaluator.policy().recoveryEvaluations(), openForSensor.keySet()));
-            EpisodeTracker.Transition transition = tracker.apply(evaluation.detected());
+            EpisodeTracker.Transition transition = tracker.apply(evaluation.detected(), evaluation.undecided());
             HealthAssessment assessment = HealthAssessment.from(evaluation, transition.active());
 
             boolean statusChanged = previous == null || !previous.status().equals(assessment.status().name());

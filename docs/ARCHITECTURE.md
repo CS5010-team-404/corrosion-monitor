@@ -25,11 +25,11 @@ enclosures.
  │  ingestion  (HMAC, validate)│   │  auth, users, equipment, profiles         │
  │  sensor health (7 rules)    │   │  analytics  → risk_assessments            │
  │  simulator (10 scenarios)   │   │  alerts     ← alert_signals               │
- │  forecast API (ML model)    │   │  audit      ← audit_outbox → audit_log    │
+ │  forecasts (API + table)    │   │  audit      ← audit_outbox → audit_log    │
  └──────────────┬─────────────┘   └────────────────────┬─────────────────────┘
                 └──────────── one MySQL 8 database ────┘
      platform writes: sensors, readings, ingest_rejections, sensor_health, sensor_health_events,
-                      alert_signals, audit_outbox, service_heartbeats
+                      sensor_forecasts, alert_signals, audit_outbox, service_heartbeats
      team backend reads them; it never needs to call the platform, and vice versa
 ```
 
@@ -55,7 +55,7 @@ The frontend supports both: `VITE_PLATFORM_URL` defaults to `VITE_API_URL`.
 | `ecp-forecast` | Ridge (Huber) margin forecaster + logistic early warning, trainer, bundled model | no |
 | `ecp-ingestion` | `POST /api/v1/ingest/readings`: signature, timestamp, validation, batch insert, retention | yes |
 | `ecp-health` | Health rules, episodes with hysteresis, service watchdog, `/api/v1/health/**` | yes |
-| `ecp-platform-app` | Runnable service: security (JWT validation), CORS, WebSocket, device registry, demo devices, embedded simulator, forecast API, Flyway (own history table) | yes |
+| `ecp-platform-app` | Runnable service: security (JWT validation), CORS, WebSocket, device registry, demo devices, embedded simulator, forecast API and the forecast publisher (`sensor_forecasts`, every minute), Flyway (own history table) | yes |
 
 Pure-Java domain code (rules, simulator, forecaster, maths) has no framework dependency, so it is easy to test and
 easy to move.

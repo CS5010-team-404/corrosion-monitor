@@ -223,6 +223,28 @@ class SignalConsumerTest {
         assertThat(ids).isSorted();
     }
 
+    @Test
+    void analyticsAlertsAreTitledWithTheEquipmentAndLocationNames() {
+        long equipmentId = anEquipmentId();
+        String expected = jdbc.queryForObject("""
+                SELECT e.name || ', ' || l.name FROM equipment e JOIN location l ON l.id = e.location_id WHERE e.id = ?
+                """, String.class, equipmentId);
+        signal("ANALYTICS", "CONDENSATION_RISK", "WARNING", "RAISED", equipmentId, "ANALYTICS:CONDENSATION_RISK:" + equipmentId);
+        signal("ANALYTICS", "CONDENSATION_FORECAST", "WARNING", "RAISED", equipmentId,
+                "ANALYTICS:CONDENSATION_FORECAST:" + equipmentId);
+        signal("SENSOR_HEALTH", "STALE", "WARNING", "RAISED", equipmentId, "HEALTH:STALE:1");
+
+        consumer.consumeBatch();
+
+        assertThat(jdbc.queryForList("SELECT title FROM alert ORDER BY id", String.class)).containsExactly(
+                "Condensation risk: " + expected, "Condensation forecast: " + expected, "STALE");
+        // a repeat keeps the readable title
+        signal("ANALYTICS", "CONDENSATION_RISK", "CRITICAL", "RAISED", equipmentId, "ANALYTICS:CONDENSATION_RISK:" + equipmentId);
+        consumer.consumeBatch();
+        assertThat(jdbc.queryForObject("SELECT title FROM alert WHERE dedup_key = ?", String.class,
+                "ANALYTICS:CONDENSATION_RISK:" + equipmentId)).isEqualTo("Condensation risk: " + expected);
+    }
+
     private static long anEquipmentId() {
         return jdbc.queryForObject("SELECT MIN(id) FROM equipment", Long.class);
     }

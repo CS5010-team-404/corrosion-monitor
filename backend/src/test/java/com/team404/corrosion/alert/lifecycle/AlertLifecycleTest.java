@@ -261,6 +261,23 @@ class AlertLifecycleTest {
     }
 
     @Test
+    void aFailingEmailNeverBlocksEscalation() {
+        Instant now = Instant.parse("2026-11-06T12:00:00Z");
+        long first = alert("CRITICAL", "OPEN", now.minus(Duration.ofMinutes(10)));
+        long second = alert("CRITICAL", "OPEN", now.minus(Duration.ofMinutes(10)));
+        var job = new EscalationJob(repository, (a, emails) -> {
+            throw new IllegalStateException("SMTP down");
+        }, events, tx, fixed(now), Duration.ofMinutes(5));
+
+        assertThat(job.escalateDue()).isEqualTo(2);
+
+        assertThat(level(first)).isEqualTo(1);
+        assertThat(level(second)).isEqualTo(1);
+        assertThat(jdbc.queryForList("SELECT action FROM audit_outbox", String.class))
+                .containsExactly("ALERT_ESCALATED", "ALERT_ESCALATED");
+    }
+
+    @Test
     void aWarningThatTurnsCriticalGetsTheFullFiveMinutesFromThen() {
         Instant now = Instant.parse("2026-11-06T12:00:00Z");
         long id = alert("WARNING", "OPEN", now.minus(Duration.ofMinutes(30)));

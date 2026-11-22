@@ -5,8 +5,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
- * Turns on the background jobs (sensor health, service watchdog, retention). On by default; tests set
- * {@code ecp.scheduling.enabled=false} and call the jobs directly, so nothing runs on its own while they check results.
+ * Background jobs (sensor health, watchdog, retention, forecast publishing). On by default;
+ * {@code ecp.scheduling.enabled=false} lets integration tests run each job by hand, deterministically.
  */
 @Configuration
 @EnableScheduling

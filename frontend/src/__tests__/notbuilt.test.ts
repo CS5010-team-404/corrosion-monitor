@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { PENDING, alerts, equipmentStatus, profiles, sensorsHealth, users } from "../api/endpoints";
+import { PENDING, alerts, assessments, equipmentStatus, profiles, sensorsHealth, users } from "../api/endpoints";
 import { ApiError, NotBuiltError, isSample } from "../lib/api";
 import { config } from "../lib/config";
 import { ErrorState } from "../components/ui";
@@ -21,10 +21,10 @@ describe("endpoints that aren't built yet", () => {
 
   it("turns a 404 into NotBuiltError with the endpoint and owner, then stops requesting it", async () => {
     fetchMock.mockResolvedValue(respond(404));
-    const err = await equipmentStatus().catch((e) => e);
+    const err = await assessments(1, 120).catch((e) => e);
     expect(err).toBeInstanceOf(NotBuiltError);
-    expect(err.message).toBe("Equipment status isn't available yet. It needs GET /api/v1/equipment/status (owner: Aayushee).");
-    await expect(equipmentStatus()).rejects.toBeInstanceOf(NotBuiltError);
+    expect(err.message).toBe("Equipment history isn't available yet. It needs GET /api/v1/equipment/{id}/assessments (owner: Aayushee).");
+    await expect(assessments(1, 120)).rejects.toBeInstanceOf(NotBuiltError);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -50,6 +50,14 @@ describe("endpoints that aren't built yet", () => {
     expect(isSample(list)).toBe(true);
   });
 
+  it("treats equipment status as built: a 404 is a real error, never sample data", async () => {
+    config.mockFallback = true;
+    fetchMock.mockResolvedValue(respond(404, { message: "No such path" }));
+    const err = await equipmentStatus().catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).not.toBeInstanceOf(NotBuiltError);
+  });
+
   it("treats the alert endpoints as built: a 404 is a real error, never sample data", async () => {
     config.mockFallback = true;
     fetchMock.mockResolvedValue(respond(404, { message: "Alert 99 not found." }));
@@ -67,9 +75,9 @@ describe("endpoints that aren't built yet", () => {
 
 describe("not built yet panel", () => {
   it("shows the calm panel with endpoint and owner instead of the error state", () => {
-    render(createElement(ErrorState, { error: new NotBuiltError(404, PENDING.reportSummary), onRetry: () => {} }));
+    render(createElement(ErrorState, { error: new NotBuiltError(404, PENDING.profiles), onRetry: () => {} }));
     expect(screen.getByText("Not built yet")).toBeTruthy();
-    expect(screen.getByText(/It needs GET \/api\/v1\/reports\/summary \(owner: Aayushee with Dumebi\)/)).toBeTruthy();
+    expect(screen.getByText(/It needs GET \/api\/v1\/profiles \(owner: team\)/)).toBeTruthy();
     expect(screen.queryByText("Could not load this page")).toBeNull();
   });
 });

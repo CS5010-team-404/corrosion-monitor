@@ -29,6 +29,17 @@ Analytics is only as good as its readings. A sensor that stops reporting, freeze
 
 A sensor is **late** (shown as Degraded, no alert) after 2 missed intervals.
 
+**Startup grace.** For 3 minutes after the platform starts (`ecp.health.startup-grace`, env
+`ECP_HEALTH_STARTUP_GRACE`, `PT0S` turns it off), a sensor that would be Offline is shown as late instead, because the
+silence may only be the platform's own downtime (the embedded simulator restarts with it, and devices retry). No new
+Offline issue opens and no alert is raised during the grace, and an Offline episode that was already open before the
+restart is kept as it is: it is neither cleared nor raised again. Every other rule applies as usual. Once the grace is
+over, a sensor that is still silent goes Offline at once.
+
+**Reporting interval.** Each sensor's interval (`sensors.expected_interval_s`, 5-3600 s) is set when it is
+registered and can be changed by an admin in Administration › Sensors (`PATCH /api/v1/admin/sensors/{id}`). Late and
+Offline are judged against the new value from the next evaluation; the embedded simulator switches to it at once.
+
 Status, worst first: Offline, Stuck, Faulty (impossible or erratic), Degraded (any other issue, or late), Healthy. A sensor that has never reported is Unknown.
 
 Score: 100 minus a penalty per open issue (Offline 100, Stuck 70, Impossible 50, Erratic 40, Losing 25, Signatures 20, Clock 15, Late 10), never below 0.
@@ -43,6 +54,8 @@ Every threshold is configurable under `ecp.health` in `application.yml`.
 - `audit_outbox`: `SENSOR_ISSUE_OPENED` and `SENSOR_ISSUE_CLOSED`.
 - `/topic/health`: the updated sensor view when anything changes.
 - The service watchdog raises `SERVICE_DOWN` when another background service has not succeeded for 2 minutes.
+- Its `trusted` flag also decides which sensors get a row in `sensor_forecasts` (the forecast publisher skips
+  untrusted sensors and removes their rows).
 
 ## Ideas for the remaining weeks
 

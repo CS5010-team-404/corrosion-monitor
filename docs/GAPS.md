@@ -11,36 +11,43 @@ Owners: Aayushee (analytics), Dumebi (alerts), Anela (audit), Joshua (platform/f
 - Missing: `GET /api/v1/admin/users` (`User`: username, fullName, enabled, lockedUntil, lastLoginAt; there are no `enabled`/`last_login_at` columns). Owner: team
 - Missing: `GET /api/v1/profiles`. `equipment_profile` now has `kind`, `temp_min_c`, `temp_max_c` and `surface_offset_c` (V8), but the endpoint does not exist, and the columns are named `rh_warn_pct`/`dew_margin_warn_c`. Owner: team
 - Missing: `/topic/risk` messages (`/ws` now exists, see Done; analytics publishes through `SimpMessagingTemplate`). Owner: Aayushee
-- Mismatch: `docs/1-api-contract.md` still mentions an Auditor role; decision 4 has four roles (TECHNICIAN, OPERATOR, MANAGER, ADMIN). Owner: team
 
 ### Aayushee: analytics
+- Missing: `AnalyticsService.riskSummary(from, to)` for the report's time in each risk level. `ReportService.riskFigures` is the one method to fill (filtered to the location); until then `equipment` is `[]` and the CSV/PDF say "not available yet". Owner: Aayushee
 - Missing: `GET /api/v1/equipment/{id}/assessments?minutes=` → `AssessmentPoint[]` (next analytics PR). Owner: Aayushee
-- Missing: the 15, 30 and 60 minute margins and `predictedCondensationAt` in `GET /api/v1/equipment/status` (they are null for now); fill them from the platform forecaster (`ecp-forecast`) in a later PR. Owner: Aayushee
+- Missing: the 15, 30 and 60 minute margins and `predictedCondensationAt` in `GET /api/v1/equipment/status` (they are null for now). The platform now publishes them every minute per trusted sensor in the shared table `sensor_forecasts` (CONTRACTS.md), so analytics can read them with one join instead of running the model. Owner: Aayushee
 - Confirm or replace the demo profile thresholds and risk_budget in V3, and the demo kind, temperature range and cold-spot offset added in V8, with cited values. Owner: Aayushee
 - Missing: a `risk_assessments` table (ARCHITECTURE.md); the schema has `risk_state` and `forecast`, both keyed by location rather than equipment. The status endpoint now computes the risk index on each request from the last 24 hours of readings. Owner: Aayushee
 - Missing: producing `alert_signals` (`ANALYTICS:CONDENSATION_RISK:<id>`, `ANALYTICS:CONDENSATION_FORECAST:<id>`) (a later PR, after the assessments endpoint and the forecast). Owner: Aayushee
-- Missing: `GET /api/v1/reports/summary` and `.csv` / `.pdf` (no OpenPDF dependency). Owner: Aayushee with Dumebi
 
 ### Dumebi: alerts
-- Mismatch: `docs/1-api-contract.md` still lists `/alerts/{id}/ack` and Operator as the acting role; the code follows the UI and CONTRACTS.md (`/acknowledge`, TECHNICIAN and ADMIN). Owner: Dumebi
+- None open.
+
+### Joshua: frontend
+- Optional: the Reports page could show the extra `ReportSummary` fields the backend now returns (`alertsBySeverity`, `meanMinutesToResolve`, `escalations`, `correctiveActionsByType`, `location`); add them to `types.ts` when the page uses them. Owner: Joshua
 
 ### Anela: audit
 - Missing: `GET /api/v1/audit` entries don't include `prevHash` and `hash` yet; the Audit page shows "–" in the Hash column until they do. Owner: Anela
 - Mismatch: the UI asks for `size=500`, the backend caps a page at 200, so the page shows the newest 200 entries. Owner: Anela + Joshua
 
 ### Joshua: platform
-- Duplicate: team `forecast` table vs platform forecast API (`/api/v1/sensors/{id}/forecast`); decide which analytics uses. Owner: Joshua + Aayushee
+- Duplicate: team `forecast` table (keyed by location) vs the platform's `sensor_forecasts` table (per sensor, published every minute) and forecast API (`/api/v1/sensors/{id}/forecast`); decide which analytics uses and whether the team table is dropped. Owner: Joshua + Aayushee
 - Duplicate: team `simulator/` module vs `platform/ecp-simulator` (different signing scheme). Owner: Joshua + team
 
 ### No action
 - `alert` + `alert_signals` and `audit_log` + `audit_outbox` have different roles (state vs inbox); keep both.
 
 ## Done
+- Reports (FR7): `GET /api/v1/reports/summary?from=&to=&location=` → `ReportSummary` (the `types.ts` fields plus alerts by severity, mean minutes to resolve, escalations and corrective actions by type), `.csv` (one row per metric, RFC 4180 quoting, formula-safe) and `.pdf` (OpenPDF, with a simulated-data note), managers and admins only. The period is `[from, to)`; the UI sends the end of the last chosen day. Removed from `PENDING`. Covered by `ReportCalculatorTest`, `ReportFilesTest` and `ReportIntegrationTest` (signals → alerts → acknowledge/resolve → report).
+- Escalation email in production: SMTP from `SPRING_MAIL_HOST/PORT/USERNAME/PASSWORD` and `ECP_ALERTS_MAIL_FROM`, 5 s connect and 10 s read/write timeouts, best effort (DEPLOYMENT.md section 6). `MailManagerNotifierTest` sends through GreenMail.
+- Analytics alerts are titled with the equipment and location ("Condensation risk: Rack A1, Server Room A").
+- `docs/1-api-contract.md`: four roles, `/acknowledge`, technicians and admins act on alerts, report paths.
 - Equipment status: `GET /api/v1/equipment/status` → `EquipmentStatus[]` (any signed-in user) with dew point, condensation margin, Peck risk index and time of wetness over the last 24 hours, and a NORMAL / WARNING / CRITICAL / UNKNOWN level from the profile thresholds. It reads platform `readings` per equipment through `sensors.equipment_id`, only from sensors with `sensor_health.trusted = TRUE` (a trusted sensor is preferred when an item has several, and an item with no trusted reading is UNKNOWN). The dew point is the shared `alert.calculation.DewPoint`. `equipment_profile` gets `kind`, `temp_min_c`, `temp_max_c` and `surface_offset_c` in V8, so the UI fields no longer come from Java. Covered by unit tests and by `EquipmentStatusIntegrationTest` (real SQL on MySQL with the production settings).
 - Alert audit and live updates: every alert state change (opened, acknowledged, resolved by a user or by the quiet period, escalated, corrective action logged) writes `audit_outbox` in the same transaction (`ALERT_OPENED`, `ALERT_ACKNOWLEDGED`, `ALERT_RESOLVED`, `ALERT_ESCALATED`, `CORRECTIVE_ACTION_LOGGED`; entity `alert`), and after commit a notice `{alertId, action}` goes to `/topic/alerts`. Severity refreshes and CLEARED signals push `ALERT_UPDATED` but write no audit event, because they are not state changes.
 - Backend STOMP at `/ws` (simple broker `/topic`, origins from `ecp.ws.allowed-origin-patterns`). The handshake is open, so topics carry change notices only. Approved for the alerts work; the shared edits were `backend/pom.xml` and `SecurityConfig`.
 - Alert endpoints: `GET /api/v1/alerts?status=ALL|ACTIVE|OPEN|ACKNOWLEDGED|RESOLVED&limit=`, `GET /api/v1/alerts/{id}` → `{alert, actions}`, `POST …/acknowledge`, `…/resolve {notes}`, `…/actions {actionType, notes}`. OPEN → ACKNOWLEDGED → RESOLVED (an OPEN alert may be resolved directly), wrong-state requests get 409, TECHNICIAN and ADMIN act, everyone signed in reads. `corrective_action` has `action_type` and `notes` (V6).
-- UI on the alert endpoints: the Alerts page, the bell and the Overview's open-alerts count call them directly (no longer in `PENDING`; the Overview itself still shows "Not built yet" until equipment status exists), and with `VITE_BACKEND_LIVE=true` (set by `scripts/run-local.sh`) they refetch on `/topic/alerts`. V5–V7 are in `applied-migrations.txt`, so `MigrationChecksumTest` guards them.
+- UI on equipment status: the Overview (conditions card, locations, equipment tiles, open-alerts count) and the Equipment page use `GET /api/v1/equipment/status` directly (no longer in `PENDING`). Untrusted sensors show "No trusted data", and the empty forecast fields show "–". The Equipment chart shows "Not built yet" until the assessments endpoint exists. V8 is in `applied-migrations.txt`, so `MigrationChecksumTest` guards it.
+- UI on the alert endpoints: the Alerts page, the bell and the Overview's open-alerts count call them directly (no longer in `PENDING`), and with `VITE_BACKEND_LIVE=true` (set by `scripts/run-local.sh`) they refetch on `/topic/alerts`. V5–V7 are in `applied-migrations.txt`, so `MigrationChecksumTest` guards them.
 - Escalation: an OPEN CRITICAL alert not acknowledged within 5 minutes (`ecp.alerts.escalate-after`) gets `escalation_level` 1 once and the managers are emailed (best effort; MailHog locally).
 - Alerts: `alert` has equipment, sensor, source, title, dedup key, escalation level, resolved_at/by and condition_cleared_at, and RESOLVED replaces CLOSED (V5); `device_id` and `critical_since` (escalation counts from it) in V7. The consumer (`alert/signal`) reads `alert_signals` in id order and sets `processed_at`: RAISED opens or updates one alert per dedup key, CLEARED records `condition_cleared_at`, and an alert auto-resolves after a quiet period (`ecp.alerts.quiet-period`, default 10 minutes).
 - Login: `POST /api/v1/auth/login {email, password}` → `{token, expiresAt, email, fullName, role}` and `GET /api/v1/auth/me`, on `app_user` (BCrypt, same message for unknown email and wrong password). a4c64b0, 07c7480
