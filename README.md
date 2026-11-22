@@ -283,10 +283,10 @@ corrected where the code on `dev` shows otherwise):
 | FR2: Forecast condensation 15–60 minutes ahead                                  | Partial     | Forecaster trained and evaluated ([docs/ML_FORECAST.md](docs/ML_FORECAST.md)) with a forecast API in the platform. The forecast fields in equipment status are still empty. |
 | FR3: Warning and critical alerts, with escalation                               | Partial     | Sensor-health signals become alerts; a critical alert not acknowledged in 5 minutes escalates and emails the managers; live updates on `/topic/alerts`. Analytics does not raise condensation-risk signals yet. |
 | FR4: Acknowledge alerts and record corrective actions                           | Done        | Acknowledge, resolve and corrective actions (type and notes), with a timeline in the UI. |
-| FR5: Roles with enforced access levels                                          | Done        | Four roles. Rules are enforced on the server for every `/api/v1` path in both services (device ingestion is checked by its HMAC signature instead); refused audit requests are logged. User administration screens are not built yet (FR8). |
+| FR5: Roles with enforced access levels                                          | Done        | Four roles. Rules are enforced on the server for every `/api/v1` path in both services (device ingestion is checked by its HMAC signature instead); refused audit requests are logged. Admins change roles and unlock accounts in Admin > Users (audited). |
 | FR6: Accurate audit log                                                         | Done        | SHA-256 hash chain, on-demand verification, nightly checkpoints, audit log page. |
 | FR7: Export reports (CSV/PDF)                                                   | Not started | Planned for Phase 3. |
-| FR8: Administrators configure equipment profiles and devices                    | Partial     | Device registry API and simulator controls; profiles with thresholds in the database (V8 adds kind, temperature range and surface offset). No screens to edit users, devices or profiles yet. |
+| FR8: Administrators configure equipment profiles and devices                    | Partial     | Device registry API and simulator controls; profiles with thresholds in the database (V8 adds kind, temperature range and surface offset). Admin > Users lists accounts, unlocks them and changes roles. No screens to edit devices or profiles yet. |
 
 Phase 1 listed three roles; the team agreed on four (Technician, Operator, Manager, Admin) in
 [docs/DECISIONS.md](docs/DECISIONS.md). Missing pieces are tracked with owners in [docs/GAPS.md](docs/GAPS.md).
@@ -295,7 +295,7 @@ Phase 1 listed three roles; the team agreed on four (Technician, Operator, Manag
 
 - Analytics: the assessments endpoint (equipment history), forecast fields, and condensation-risk alert signals.
 - Reports: CSV and PDF exports (FR7).
-- Administration screens and APIs for users, equipment profiles and devices (FR8).
+- Administration screens and APIs for equipment profiles and devices (FR8).
 - Retrain the forecaster on a real dataset.
 - Audit: keep checkpoints somewhere the application cannot write.
 - First weekly release from `dev` to `main`, then security, sensor-failure and performance testing.
