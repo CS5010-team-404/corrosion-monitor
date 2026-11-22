@@ -57,9 +57,79 @@ Every threshold is configurable under `ecp.health` in `application.yml`.
 - Its `trusted` flag also decides which sensors get a row in `sensor_forecasts` (the forecast publisher skips
   untrusted sensors and removes their rows).
 
+## Real-data check: Intel Berkeley Research Lab
+
+**Question.** Do the rules catch real sensor faults, not only the simulator's? There are no official fault labels for
+real sensor data, so this is a check against a stated, heuristic reference, not a measurement of true accuracy.
+
+**Data.** Intel Berkeley Research Lab sensor data (P. Bodik, W. Hong, C. Guestrin, S. Madden, M. Paskin, R. Thibaux,
+2004; http://db.csail.mit.edu/labdata/labdata.html): 54 Mica2Dot motes in one office lab, temperature, humidity,
+light and battery voltage every 31-second epoch, 28 Feb to 3 Apr 2004 (after cleaning). Known faults: as batteries die, motes report
+temperatures above 100 °C (122.153 °C again and again) and negative humidity; the radio loses many messages. The page
+states no licence; the files are used for evaluation only and are **not committed** (`data/intel/`, git-ignored).
+`data.txt.gz` SHA-256 `d99288c8…c7225`, `mote_locs.txt` SHA-256 `3865c026…6bf04` (full hashes in the results file).
+
+**Method** (`edu.neu.ecp.health.realdata`, `scripts/evaluate-health-intel-lab.sh`, about 90 s):
+- Loading drops and counts lines without all eight fields (93,879), mote ids not in `mote_locs.txt` (9,719) and
+  repeated (mote, epoch) pairs (107,958, first kept); 2,102,126 readings from 52 motes remain. Values are not cleaned:
+  faulty values are exactly what the rules must see.
+- Each mote is replayed through the production `HealthEvaluator` and `EpisodeTracker` with the production settings:
+  an evaluation every 5 s, a 15-minute window, 31 s expected interval, 3 clean evaluations to close an issue, from the
+  mote's first reading to the end of the data. The epoch is the sequence number; readings arrive when measured.
+  CLOCK_SKEW and SIGNATURE_FAILURES cannot fire (no receive times, no signatures).
+- **Reference (heuristic, stated before scoring, independent of the rules' thresholds):** *implausible* = a reading in
+  the window outside 0–50 °C or 0–100 % RH (an indoor office); *low battery* = newest reading below 2.3 V; *flat* =
+  newest reading is part of an exactly repeated run lasting at least an hour; *faulty* = any of the three;
+  *silent* = no reading for more than the offline threshold (the OFFLINE rule's own definition, so it only checks the
+  replay). Scored per evaluation tick (5 s of one mote): precision and recall of each rule against each reference.
+- Comparison detector (B3): a robust z-score (reading more than 6 robust SDs from the median of the mote's previous
+  60 readings), same reference.
+
+**Results, production defaults** (full tables and examples: `docs/results/intel-lab-results.md`):
+
+| Rule | Motes | Episodes | Median episode | Precision / recall vs *faulty* |
+|---|---|---|---|---|
+| OUT_OF_RANGE | 50 | 2,800 | 19 min | 1.00 / 0.68 |
+| STUCK | 41 | 4,270 | 1 min | 1.00 / 0.07 |
+| ERRATIC | 10 | 26 | 14 min | 1.00 / 0.00 |
+| Value rules together (STUCK, OUT_OF_RANGE, ERRATIC) | | | | **1.00 / 0.68** |
+| OFFLINE | 52 | 66,102 | 1 min | (silence, not bad values) |
+| LOSSY | 52 | 46,402 | 5 min | (loss, not bad values) |
+| Robust z-score (comparison) | | | | 0.19 / 0.02 |
+
+**What it shows.**
+- When a value rule fires, the data really is bad: precision 1.00 against *implausible* and *faulty*, 0.99 against
+  *low battery*, 0.89 against *flat*. The rules are safe to act on.
+- Recall is the weak point, for three data-specific reasons:
+  1. The dying-battery value 122.153 °C is *inside* the SHT31 range (−40 to 125 °C), so OUT_OF_RANGE only catches it
+     through the negative humidity that often comes with it. With the room's plausible range instead
+     (`ecp.health.temp-min-c=0`, `temp-max-c=60`), recall against *faulty* rises to **0.90** at precision 1.00
+     (variant *indoor-range*).
+  2. STUCK needs 20 identical readings inside the 15-minute window. At 31 s a window holds at most 29 readings and,
+     with this radio's 35 % loss, usually fewer than 20, so frozen motes are rarely called stuck (recall 0.07).
+     `stuck-min-readings=10` raises it to 0.30 but makes STUCK flap (10,334 short episodes).
+  3. ERRATIC is designed for jumps between healthy readings; real failures here are long plateaus, not jumps.
+- OFFLINE and LOSSY are right by definition (35.2 % of epochs are missing), but on a lossy radio at 31 s, OFFLINE
+  flaps: 66,102 episodes, median 1 minute. An offline factor of 20 (about 10 minutes) cuts that to 6,012.
+- The robust z-score catches only the moment a value jumps, not the long faulty plateau that follows, so it adds little.
+
+**Changes.** None to the defaults. They are tuned for this project's SHT31 sensors on Wi-Fi every 15 s, and this lab is a
+different deployment (slow, lossy radio; failure mode at 122 °C). Every threshold involved is already configurable
+under `ecp.health` (no code change was needed). Proposed, for the team to decide:
+- deployments should set `temp-min-c`/`temp-max-c` to the *plausible* range of the room or enclosure, not the sensor's
+  physical range; this is the one change the data clearly supports (recall 0.68 → 0.90, precision unchanged);
+- for slow or lossy links, raise `offline-factor` and judge STUCK over a time span rather than a reading count (a code
+  change, not made here; listed under ideas).
+
+**Limits.** One building, one network, 2004 hardware. The reference is heuristic: a frozen value can be a real steady
+room, a 2.3 V reading can still be right, and "implausible" uses an office's range. Mote-time after a mote died counts
+as silent, which inflates OFFLINE hours. Supply voltage is not something our devices report today.
+
 ## Ideas for the remaining weeks
 
 - Compare two sensors on the same equipment and flag one that drifts away from the other.
 - For the Raspberry Pi: report supply voltage and flag brown-outs.
 - Availability per sensor for the reports page (percentage of the period online and trusted).
-- Per-model physical limits instead of one global SHT31 range.
+- Per-model physical limits instead of one global SHT31 range, and per-deployment plausible ranges (see the real-data check).
+- Judge STUCK over a time span (for example 10 minutes without any change) instead of a reading count, so slow or lossy
+  sensors are covered too.
