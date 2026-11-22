@@ -15,10 +15,12 @@ import org.springframework.web.bind.annotation.RestController;
  * POST /api/v1/ingest/readings
  * X-Device-Id: SIM-001
  * X-Timestamp: 1761840000
+ * X-Nonce: 9b2f4c1d0e8a7b6c5d4e3f2a1b0c9d8e   (optional; then the signature covers it, see Hmac)
  * X-Signature: 3f1c...
  * {"readings":[{"seq":42,"measuredAt":"2026-11-02T15:00:00Z","temperatureC":22.41,"humidityPct":48.20,"surfaceTempC":20.9}]}
  * </pre>
- * Responds 202 with counts, or 400/401/403 with the rejection reason.
+ * Responds 202 with counts, or 400/401/403 with the rejection reason, or 409 REPLAYED_REQUEST when the same signed
+ * request (same nonce, or same signature for devices without one) was already accepted.
  */
 @RestController
 @RequestMapping("/api/v1/ingest")
@@ -34,8 +36,9 @@ public class IngestionController {
     public ResponseEntity<IngestionService.Result> ingest(@RequestHeader("X-Device-Id") String deviceId,
                                                           @RequestHeader("X-Timestamp") String timestamp,
                                                           @RequestHeader("X-Signature") String signature,
+                                                          @RequestHeader(value = "X-Nonce", required = false) String nonce,
                                                           @RequestBody String body) {
-        IngestionService.Result result = service.ingest(deviceId, timestamp, signature, body);
+        IngestionService.Result result = service.ingest(deviceId, timestamp, signature, nonce, body);
         return ResponseEntity.status(result.httpStatus()).body(result);
     }
 }

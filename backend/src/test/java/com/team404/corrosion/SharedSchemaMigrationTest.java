@@ -39,7 +39,7 @@ class SharedSchemaMigrationTest {
             "alert_signals", "audit_outbox",
             // platform
             "sensors", "readings", "ingest_rejections", "sensor_health", "sensor_health_events",
-            "service_heartbeats", "job_cursors", "sensor_forecasts",
+            "service_heartbeats", "job_cursors", "sensor_forecasts", "ingest_replay_guard",
             // history
             "flyway_schema_history", "flyway_platform_history");
 

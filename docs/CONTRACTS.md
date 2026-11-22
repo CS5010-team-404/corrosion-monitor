@@ -40,11 +40,20 @@ All paths use the `/api/v1` prefix (decision 3 in `DECISIONS.md`).
 
 ## Device ingestion
 `POST /api/v1/ingest/readings` (platform, no JWT). Headers `X-Device-Id`, `X-Timestamp` (unix seconds, ±5 min),
-`X-Signature` = lowercase hex HMAC-SHA256 of `"<X-Timestamp>.<raw body>"` with the device key.
+`X-Nonce` (16–64 of `[A-Za-z0-9_-]`, new for every request; recommended) and `X-Signature` = lowercase hex
+HMAC-SHA256 with the device key of `"<X-Timestamp>.<X-Nonce>.<raw body>"`, or of `"<X-Timestamp>.<raw body>"` when a
+device sends no nonce (legacy signing, still accepted).
 Body `{"readings":[{"seq":1,"measuredAt":"2026-11-03T01:00:00Z","temperatureC":22.4,"humidityPct":55.0,"surfaceTempC":20.9?}]}`,
 up to 500 readings. Responses: 202 with `{accepted, duplicates}` (a repeated seq is counted, not stored twice), 401
-`UNKNOWN_DEVICE` / `STALE_TIMESTAMP` / `BAD_SIGNATURE`, 403 `INACTIVE_SENSOR`, 400 `INVALID_PAYLOAD`. Every rejection
-is recorded in `ingest_rejections`, which sensor health uses to flag bad signatures.
+`UNKNOWN_DEVICE` / `STALE_TIMESTAMP` / `BAD_SIGNATURE`, 403 `INACTIVE_SENSOR`, 400 `INVALID_PAYLOAD`, 409
+`REPLAYED_REQUEST`. Every rejection is recorded in `ingest_rejections`, which sensor health uses to flag bad signatures.
+**Replays:** a signed request is accepted once. Its nonce (or, without one, its signature) is remembered in the
+platform-only table `ingest_replay_guard` (platform migration V3) until its timestamp leaves the window (+1 min), and
+pruned every minute (`ecp.ingestion.replay-guard-prune-every`, default PT1M). The same request again gets 409
+`REPLAYED_REQUEST`. Compatibility: old devices keep working unchanged; a byte-identical resend within the window is
+now refused instead of being answered 202 with everything counted as duplicates. A device that retries should sign
+again (new timestamp and nonce); its already-stored readings still count as duplicates. A 409 means "already
+delivered", so a client can drop that batch. Replays do not count towards the SIGNATURE_FAILURES health issue.
 Reference clients: `scripts/send-reading.sh`, `devices/raspberry-pi/sender.py`, `ecp-simulator`.
 
 ## Shared tables (created by the platform, `CREATE TABLE IF NOT EXISTS`)
