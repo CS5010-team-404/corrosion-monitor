@@ -381,6 +381,15 @@ These are known limitations on `dev` at the time of writing, to address in QA. O
 - **Audit checkpoints** are kept in the same database the application writes. A copy somewhere the app cannot write would protect against a full rewrite by someone with database access.
 - **Duplicates to resolve:** the team `forecast` table versus the platform's `sensor_forecasts`, and the original `simulator/` module versus `platform/ecp-simulator`.
 - **Out-of-date document:** [docs/1-api-contract.md](docs/1-api-contract.md) still mentions an Auditor role and `/alerts/{id}/ack`; the code follows [docs/CONTRACTS.md](docs/CONTRACTS.md).
+- **npm audit (frontend, dev tools only):** `npm audit --omit=dev` finds **0** vulnerabilities, so nothing in the
+  shipped bundle (React only) is affected. `npm audit` lists 16 advisories in development tools that never reach
+  users: Vite and esbuild (dev server: a website open in the same browser could read dev-server responses, `server.fs`
+  bypasses, Windows editor-launch issues), Vitest with `@vitest/mocker` and `tinypool` (test runner: problems when its
+  API/UI server listens or when worker options are attacker-controlled), and `glob`/`minimatch` via coverage. We
+  updated within the same major versions (Vite 5.4.11 → 5.4.21, Vitest and coverage 2.1.5 → 2.1.9), which closed 10
+  of the 26 advisories, including the critical Vitest RCE. The rest need Vite 7 and Vitest 4 (major upgrades, left for
+  a planned upgrade). Until then: don't expose the dev server (`--host`), stop it when not in use, and don't run the
+  Vitest UI/API server.
 - **Forecaster data:** the model is trained on simulated data and still needs retraining on a real dataset.
 
 ## Team contributions (Phase 3)
