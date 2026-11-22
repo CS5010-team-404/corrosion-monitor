@@ -53,41 +53,41 @@ public final class MarginForecaster {
 
     /** @param perMinute one-minute series, oldest first, ending at "now" */
     public Forecast forecast(List<MarginPoint> perMinute) {
+        if (perMinute.size() < Features.HISTORY_MINUTES) {
+            return trendForecast(perMinute, version);
+        }
+        MarginPoint now = perMinute.get(perMinute.size() - 1);
+        double m = now.marginC();
+        double[] x = Features.at(perMinute, perMinute.size() - 1);
+        double[] out = new double[HORIZONS.length];
+        for (int i = 0; i < HORIZONS.length; i++) {
+            out[i] = m + models.get(HORIZONS[i]).predict(x);
+        }
+        Logistic.Classifier c30 = classifiers.get(30);
+        Logistic.Classifier c60 = classifiers.get(60);
+        double r30 = c30.probability(x);
+        double r60 = c60.probability(x);
+        boolean w30 = m > CRITICAL_C && r30 >= c30.threshold();
+        boolean w60 = m > CRITICAL_C && r60 >= c60.threshold();
+        return new Forecast(out[0], out[1], out[2], condensationAt(now.at(), m, out), r30, r60, w30, w60, "model", version);
+    }
+
+    /** The fallback while there is too little history: the least-squares trend, extrapolated. */
+    public static Forecast trendForecast(List<MarginPoint> perMinute, String version) {
         if (perMinute.isEmpty()) {
             throw new IllegalArgumentException("no history");
         }
         MarginPoint now = perMinute.get(perMinute.size() - 1);
         double m = now.marginC();
+        double slope = trendSlope(perMinute);
         double[] out = new double[HORIZONS.length];
-        String method;
-        double r30 = 0;
-        double r60 = 0;
-        boolean w30 = false;
-        boolean w60 = false;
-        if (perMinute.size() >= Features.HISTORY_MINUTES) {
-            double[] x = Features.at(perMinute, perMinute.size() - 1);
-            for (int i = 0; i < HORIZONS.length; i++) {
-                out[i] = m + models.get(HORIZONS[i]).predict(x);
-            }
-            Logistic.Classifier c30 = classifiers.get(30);
-            Logistic.Classifier c60 = classifiers.get(60);
-            r30 = c30.probability(x);
-            r60 = c60.probability(x);
-            w30 = m > CRITICAL_C && r30 >= c30.threshold();
-            w60 = m > CRITICAL_C && r60 >= c60.threshold();
-            method = "model";
-        } else {
-            double slope = trendSlope(perMinute);
-            for (int i = 0; i < HORIZONS.length; i++) {
-                out[i] = m + slope * HORIZONS[i];
-            }
-            method = "trend";
-            w30 = m > CRITICAL_C && out[1] <= CRITICAL_C;
-            w60 = m > CRITICAL_C && out[2] <= CRITICAL_C;
-            r30 = w30 ? 1 : 0;
-            r60 = w60 ? 1 : 0;
+        for (int i = 0; i < HORIZONS.length; i++) {
+            out[i] = m + slope * HORIZONS[i];
         }
-        return new Forecast(out[0], out[1], out[2], condensationAt(now.at(), m, out), r30, r60, w30, w60, method, version);
+        boolean w30 = m > CRITICAL_C && out[1] <= CRITICAL_C;
+        boolean w60 = m > CRITICAL_C && out[2] <= CRITICAL_C;
+        return new Forecast(out[0], out[1], out[2], condensationAt(now.at(), m, out), w30 ? 1 : 0, w60 ? 1 : 0,
+                w30, w60, "trend", version);
     }
 
     /** Least-squares slope of margin per minute over the given points. */

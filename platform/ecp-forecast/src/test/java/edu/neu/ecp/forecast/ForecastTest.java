@@ -13,9 +13,6 @@ import edu.neu.ecp.forecast.model.ModelIO;
 import edu.neu.ecp.forecast.model.Ridge;
 import edu.neu.ecp.forecast.train.SimulatedHistory;
 import edu.neu.ecp.forecast.train.Trainer;
-import edu.neu.ecp.forecast.train.UciLoader;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -80,14 +77,5 @@ class ForecastTest {
         List<MarginPoint> h = SimulatedHistory.run(5, 1);
         assertEquals(Features.NAMES.size(), Features.at(h, Features.HISTORY_MINUTES - 1).length);
     }
-
-    @Test
-    void uciLoaderInterpolatesTenMinuteRowsToMinutes() throws Exception {
-        Path csv = Files.createTempFile("uci", ".csv");
-        Files.writeString(csv, "\"date\",\"T1\",\"RH_1\"\n\"2016-01-11 17:00:00\",19.89,47.6\n\"2016-01-11 17:10:00\",19.89,46.7\n\"2016-01-11 17:20:00\",19.89,46.3\n");
-        List<MarginPoint> pts = UciLoader.room(csv, 1, 2.0);
-        assertEquals(20, pts.size());
-        assertEquals(47.15, pts.get(5).humidityPct(), 1e-9);
-        assertEquals(17.89, pts.get(0).surfaceC(), 1e-9);
-    }
+    // UCI loading, cleaning and interpolation: train/UciLoaderTest
 }
