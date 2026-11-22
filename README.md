@@ -18,68 +18,29 @@ The detailed Phase 2 write-up is in [Phase2_README.md](Phase2_README.md).
 ## Contents
 
 1. [Team](#team)
-2. [How it works](#how-it-works)
-3. [Repository structure](#repository-structure)
-4. [Setup and run](#setup-and-run)
-5. [Try it end to end](#try-it-end-to-end)
-6. [Feature status](#feature-status)
-7. [Scope and design changes since Phase 1](#scope-and-design-changes-since-phase-1)
-8. [Design patterns and principles applied](#design-patterns-and-principles-applied)
-9. [Testing](#testing)
-10. [Known issues](#known-issues)
-11. [Team contributions (Phase 3)](#team-contributions-phase-3)
-12. [Development workflow](#development-workflow)
-13. [Deployment](#deployment)
-14. [Documentation](#documentation)
-15. [Notes](#notes)
+2. [Repository Structure](#repository-structure) (with [How it works](#how-it-works))
+3. [Setup and Run](#setup-and-run) (with [Try it end to end](#try-it-end-to-end))
+4. [Feature Status](#feature-status)
+5. [Scope and Design Changes Since Phase 1](#scope-and-design-changes-since-phase-1)
+6. [Design Patterns and Principles Applied](#design-patterns-and-principles-applied)
+7. [Testing](#testing)
+8. [Known Issues](#known-issues)
+9. [Team Contributions (Phase 3)](#team-contributions-phase-3)
+10. [Development Workflow](#development-workflow)
+11. [Deployment](#deployment)
+12. [Documentation](#documentation)
+13. [Notes](#notes)
 
 ## Team
 
-| Name             | GitHub                                             | Role                                                                                  |
+| Member           | GitHub Username                                    | Role                                                                                  |
 |------------------|----------------------------------------------------|---------------------------------------------------------------------------------------|
 | Aayushee Bhat    | [@aayushee-bhat](https://github.com/aayushee-bhat) | Analytics: dew point margin, corrosion risk, equipment status                         |
 | Anela Quiroz     | [@anelajoy](https://github.com/anelajoy)           | Audit: hash-chained audit log and verification; equipment-profile API                 |
 | Dumebi Onyebuchi | [@dumebi2003](https://github.com/dumebi2003)       | Alerts: alert lifecycle, escalation, corrective actions; reports                      |
 | Joshua Dominick  | [@Joshuadommy](https://github.com/Joshuadommy)     | Data platform (ingestion, sensor health, simulator, forecaster), sign-in and user administration, frontend, deployment |
 
-## How it works
-
-```mermaid
-flowchart LR
-    dev["SHT31 devices<br/>and simulator"] -->|"signed readings<br/>(HMAC)"| ing["Ingestion<br/>(platform)"]
-    ing --> db[("MySQL 8.4<br/>shared tables")]
-    db --> health["Sensor health<br/>and forecaster<br/>(platform)"]
-    health -->|"trusted flag, alert_signals,<br/>sensor_forecasts"| db
-    db --> analytics["Analytics<br/>(backend)"]
-    db --> alerts["Alerts<br/>(backend)"]
-    db --> reports["Reports<br/>(backend)"]
-    alerts -->|"audit_outbox"| db
-    db --> audit["Audit chain<br/>(backend)"]
-    analytics --> api["REST /api/v1<br/>+ STOMP /ws"]
-    alerts --> api
-    reports --> api
-    audit --> api
-    health --> api
-    api -->|"JWT"| web["Web app<br/>(React)"]
-```
-
-The system has the two parts from the Phase 1 design. The **data platform** (`platform/`) receives and checks sensor
-data and forecasts condensation. The **team backend** (`backend/`) holds sign-in, user administration, analytics,
-alerts, reports, equipment profiles and audit. Both use one MySQL database. Key design choices:
-
-- **Services meet only through shared tables** ([docs/CONTRACTS.md](docs/CONTRACTS.md)). Neither calls the other.
-- **Untrusted sensors are skipped.** Sensor health checks 7 rules (offline, stuck, out of range, erratic, losing
-  readings, bad signatures, clock skew) and sets `sensor_health.trusted`. Analytics only uses readings from trusted
-  sensors.
-- **Signals instead of direct calls.** Producers write a RAISED or CLEARED row to `alert_signals`, and the alert
-  service turns those into alerts.
-- **A tamper-evident audit chain.** Events go to `audit_outbox` in the same transaction as the change they record.
-  The audit worker chains them into `audit_log` with SHA-256, so editing, deleting or reordering any entry is detected.
-- **One sign-in token for both services.** The backend issues a JWT that the platform also accepts.
-
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has the full picture.
-
-## Repository structure
+## Repository Structure
 
 ```
 corrosion-monitor/
@@ -122,7 +83,44 @@ transactions), which call **repositories** (JDBC, or JPA for users). For example
 (dew point, Peck risk, time of wetness, alert states, hash chain, report figures, profile validation) are plain Java
 with unit tests.
 
-## Setup and run
+### How it works
+
+```mermaid
+flowchart LR
+    dev["SHT31 devices<br/>and simulator"] -->|"signed readings<br/>(HMAC)"| ing["Ingestion<br/>(platform)"]
+    ing --> db[("MySQL 8.4<br/>shared tables")]
+    db --> health["Sensor health<br/>and forecaster<br/>(platform)"]
+    health -->|"trusted flag, alert_signals,<br/>sensor_forecasts"| db
+    db --> analytics["Analytics<br/>(backend)"]
+    db --> alerts["Alerts<br/>(backend)"]
+    db --> reports["Reports<br/>(backend)"]
+    alerts -->|"audit_outbox"| db
+    db --> audit["Audit chain<br/>(backend)"]
+    analytics --> api["REST /api/v1<br/>+ STOMP /ws"]
+    alerts --> api
+    reports --> api
+    audit --> api
+    health --> api
+    api -->|"JWT"| web["Web app<br/>(React)"]
+```
+
+The system has the two parts from the Phase 1 design. The **data platform** (`platform/`) receives and checks sensor
+data and forecasts condensation. The **team backend** (`backend/`) holds sign-in, user administration, analytics,
+alerts, reports, equipment profiles and audit. Both use one MySQL database. Key design choices:
+
+- **Services meet only through shared tables** ([docs/CONTRACTS.md](docs/CONTRACTS.md)). Neither calls the other.
+- **Untrusted sensors are skipped.** Sensor health checks 7 rules (offline, stuck, out of range, erratic, losing
+  readings, bad signatures, clock skew) and sets `sensor_health.trusted`. Analytics only uses readings from trusted
+  sensors.
+- **Signals instead of direct calls.** Producers write a RAISED or CLEARED row to `alert_signals`, and the alert
+  service turns those into alerts.
+- **A tamper-evident audit chain.** Events go to `audit_outbox` in the same transaction as the change they record.
+  The audit worker chains them into `audit_log` with SHA-256, so editing, deleting or reordering any entry is detected.
+- **One sign-in token for both services.** The backend issues a JWT that the platform also accepts.
+
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has the full picture.
+
+## Setup and Run
 
 ### Prerequisites
 
@@ -216,9 +214,19 @@ Names and purpose only; never commit real values. `scripts/gen-secrets.sh` print
 | `VITE_API_URL`, `VITE_PLATFORM_URL`                           | Web app   | Service URLs for a deployed build (empty locally: the dev proxy is used) |
 | `VITE_USE_MOCKS`, `VITE_BACKEND_LIVE`, `VITE_MOCK_FALLBACK`   | Web app   | Mock mode, live alert updates, sample data for missing endpoints         |
 
-## Try it end to end
+### Run the tests
 
-### A failing sensor becomes an alert, a technician resolves it, the audit log records it
+```bash
+mvn -B verify                                     # backend (Docker must be running for the MySQL tests)
+mvn -B -f platform/pom.xml verify                 # data platform
+cd frontend && npm run lint && npm run test:coverage && npm run build
+```
+
+Results and coverage are in [Testing](#testing).
+
+### Try it end to end
+
+#### A failing sensor becomes an alert, a technician resolves it, the audit log records it
 
 On the live demo (or locally after `scripts/run-local.sh`):
 
@@ -237,7 +245,7 @@ On the live demo (or locally after `scripts/run-local.sh`):
 
 If a page looks out of date after a new deployment, reload it without the cache (Cmd+Shift+R, or Ctrl+Shift+R).
 
-### Sign-in and lockout
+#### Sign-in and lockout
 
 Try this locally, so the shared demo accounts are not locked. With `scripts/run-local.sh` running:
 
@@ -257,25 +265,36 @@ curl -s -o /dev/null -w '%{http_code}\n' -H 'Content-Type: application/json' \
 The sign-in successes, failures and the lockout appear in the Audit log, with no passwords in them. An admin can
 unlock the account straight away in **Administration → Users**; the unlock is audited as `ACCOUNT_UNLOCKED`.
 
-## Feature status
+## Feature Status
 
 The functional requirements as worded in Phase 1, checked against the code on `dev` on 2026-11-21. Missing pieces
 are tracked with owners in [docs/GAPS.md](docs/GAPS.md).
 
-| Requirement | Status | What works | Where to find it |
-|---|---|---|---|
-| **FR1:** Read temperature and humidity from multiple sensors at adjustable intervals | Complete | 12 simulated sensors (10 scenarios), an optional Raspberry Pi client, and a signed ingestion API (HMAC, timestamp window, validation). Each device has its own reporting interval, set at registration and changed by an admin in Administration › Sensors (5–3600 s, audited as `SENSOR_INTERVAL_CHANGED`); sensor health and the embedded simulator pick it up at once. A physical device has to be set to the same interval itself. | `platform/ecp-ingestion` (`IngestionController`, `IngestionService`); `platform/ecp-simulator` (`SimulatedSensor`, `Scenario`, `SimulatorEngine`); `DeviceController` (`PATCH /api/v1/admin/sensors/{id}`); `devices/raspberry-pi/sender.py`; `frontend/src/pages/Admin.tsx` (Sensors tab) |
-| **FR2:** Forecast condensation 15–60 minutes ahead | Partial | The forecaster is trained and evaluated ([docs/ML_FORECAST.md](docs/ML_FORECAST.md)). `GET /api/v1/sensors/{id}/forecast` returns 15/30/60-minute margins, and `ForecastPublishJob` writes every trusted sensor's forecast to `sensor_forecasts` each minute. The Equipment page shows the platform forecast. **Missing:** analytics doesn't read `sensor_forecasts` yet, so `forecastMargin15C/30C/60C` and `predictedCondensationAt` in `GET /api/v1/equipment/status` are always null (Overview shows "–"); no `ANALYTICS:CONDENSATION_FORECAST` signal; the model is trained on simulated data only. | `platform/ecp-forecast` (`MarginForecaster`, `Ridge`, `Logistic`, `ModelIO`); `ecp-platform-app` `ForecastController`, `ForecastPublishJob`; platform migration `V2__sensor_forecasts.sql`; `frontend/src/pages/Equipment.tsx` |
-| **FR3:** Warning and critical alerts, with escalation | Partial | Sensor-health problems become alerts through `alert_signals` (dedup per key, CLEARED handling, auto-resolve after a quiet period). An OPEN critical alert not acknowledged in 5 minutes escalates once and emails the managers. Live updates on `/topic/alerts` (the bell and Alerts page refresh without reload). **Missing:** analytics raises no `ANALYTICS:CONDENSATION_RISK` signals, so there are no condensation alerts yet, only sensor-fault alerts (`AlertTitles` already formats them). | `alert/signal` (`SignalConsumer`, `SignalProcessor`, `JdbcAlertStore`); `alert/lifecycle` (`EscalationJob`, `MailManagerNotifier`); `StompAlertBroadcaster`; producer: platform `SensorHealthService` + `JdbcSignalPublisher` |
-| **FR4:** Acknowledge alerts and record corrective actions | Complete | Acknowledge, resolve and corrective actions (type and notes) by technicians and admins, wrong-state requests get 409, a timeline in the UI, every step audited. | `alert/lifecycle` (`AlertController`, `AlertService`, `AlertStatus`, `AlertRepository`); migrations V5–V7; `frontend/src/pages/Alerts.tsx` |
-| **FR5:** Roles with enforced access levels | Complete | Four roles (Technician, Operator, Manager, Admin) enforced on the server for every `/api/v1` path in both services (device ingestion is checked by its HMAC signature instead). BCrypt, lockout after 5 failures for 15 minutes, JWT shared by both services. Refusals are recorded as `ACCESS_DENIED`. The UI hides what a role can't do, but the server is the protection. | Backend `web/SecurityConfig`, `auth/` (`AuthService`, `TokenService`, `LoginAudit`); platform `config/SecurityConfig`; role checks in `AuditController`, `ProfileController`; `frontend/src/layout/Shell.tsx` |
-| **FR6:** Accurate audit log | Complete | SHA-256 hash chain built by a single worker from `audit_outbox`; verification against the chain head and checkpoints (managers and admins), nightly checkpoints (admins); a paged audit page showing each entry's `prevHash` and `hash`. | `audit/` (`AuditChainWorker`, `HashChain`, `ChainVerifier`, `AuditService`, `AuditScheduler`, `AuditStore`, `AuditController`); V4; `frontend/src/pages/Audit.tsx` |
-| **FR7:** Export reports (CSV/PDF) | Complete | `GET /api/v1/reports/summary`, `.csv` and `.pdf` (managers and admins) for a period and location: alerts opened (by severity), mean time to acknowledge and resolve, escalations, corrective actions by type. The CSV is RFC 4180 and formula-safe; the PDF (OpenPDF) carries a simulated-data note. The Reports page previews and downloads both. The "time in each risk level per equipment" section reads "not available yet" until analytics provides `riskSummary` (see Known issues). | `report/` (`ReportController`, `ReportService`, `ReportCalculator`, `ReportRepository`, `ReportCsv`, `ReportPdf`); `frontend/src/pages/Reports.tsx` |
-| **FR8:** Administrators configure equipment profiles and devices | Partial | **Devices:** register (one-time secret), list, rotate the secret, change the reporting interval; simulator scenarios per sensor. **Equipment profiles:** `GET /api/v1/profiles` (everyone) and `PUT /api/v1/profiles/{id}` (admins), validated with clear 400 messages and audited as `PROFILE_UPDATED`. **Users:** list, unlock and change role, audited (`ACCOUNT_UNLOCKED`, `USER_ROLE_CHANGED`); V9 adds `enabled` and `last_login_at`. **Missing:** Administration › Equipment profiles only lists profiles; the UI has no edit form for the existing `PUT` endpoint. | Platform `DeviceController`, `SimulatorController`; backend `profile/` (`ProfileController`, `ProfileService`, `ProfileValidator`, `ProfileStore`), `auth/admin/` (`UserAdminController`, `UserAdminService`, `UserAdminRules`); V9; `frontend/src/pages/Admin.tsx` |
+| Functional Requirement (from Phase 1) | Status | Where to Find It |
+|---|---|---|
+| **FR1:** Read temperature and humidity from multiple sensors at adjustable intervals | Complete | `platform/ecp-ingestion` (`IngestionController`, `IngestionService`); `platform/ecp-simulator` (`SimulatedSensor`, `Scenario`, `SimulatorEngine`); `DeviceController` (`PATCH /api/v1/admin/sensors/{id}`); `devices/raspberry-pi/sender.py`; `frontend/src/pages/Admin.tsx` (Sensors tab) |
+| **FR2:** Forecast condensation 15–60 minutes ahead | Partial | `platform/ecp-forecast` (`MarginForecaster`, `Ridge`, `Logistic`, `ModelIO`); `ecp-platform-app` `ForecastController`, `ForecastPublishJob`; platform migration `V2__sensor_forecasts.sql`; `frontend/src/pages/Equipment.tsx` |
+| **FR3:** Warning and critical alerts, with escalation | Partial | `alert/signal` (`SignalConsumer`, `SignalProcessor`, `JdbcAlertStore`); `alert/lifecycle` (`EscalationJob`, `MailManagerNotifier`); `StompAlertBroadcaster`; producer: platform `SensorHealthService` + `JdbcSignalPublisher` |
+| **FR4:** Acknowledge alerts and record corrective actions | Complete | `alert/lifecycle` (`AlertController`, `AlertService`, `AlertStatus`, `AlertRepository`); migrations V5–V7; `frontend/src/pages/Alerts.tsx` |
+| **FR5:** Roles with enforced access levels | Complete | Backend `web/SecurityConfig`, `auth/` (`AuthService`, `TokenService`, `LoginAudit`); platform `config/SecurityConfig`; role checks in `AuditController`, `ProfileController`; `frontend/src/layout/Shell.tsx` |
+| **FR6:** Accurate audit log | Complete | `audit/` (`AuditChainWorker`, `HashChain`, `ChainVerifier`, `AuditService`, `AuditScheduler`, `AuditStore`, `AuditController`); V4; `frontend/src/pages/Audit.tsx` |
+| **FR7:** Export reports (CSV/PDF) | Complete | `report/` (`ReportController`, `ReportService`, `ReportCalculator`, `ReportRepository`, `ReportCsv`, `ReportPdf`); `frontend/src/pages/Reports.tsx` |
+| **FR8:** Administrators configure equipment profiles and devices | Partial | Platform `DeviceController`, `SimulatorController`; backend `profile/` (`ProfileController`, `ProfileService`, `ProfileValidator`, `ProfileStore`), `auth/admin/` (`UserAdminController`, `UserAdminService`, `UserAdminRules`); V9; `frontend/src/pages/Admin.tsx` |
 
 Totals: 5 Complete (FR1, FR4–FR7), 3 Partial (FR2, FR3, FR8), 0 Not started.
 
-## Scope and design changes since Phase 1
+**What works, and what is missing:**
+
+- **FR1 (Complete).** 12 simulated sensors (10 scenarios), an optional Raspberry Pi client, and a signed ingestion API (HMAC, timestamp window, validation). Each device has its own reporting interval, set at registration and changed by an admin in Administration › Sensors (5–3600 s, audited as `SENSOR_INTERVAL_CHANGED`); sensor health and the embedded simulator pick it up at once. A physical device has to be set to the same interval itself.
+- **FR2 (Partial).** The forecaster is trained and evaluated ([docs/ML_FORECAST.md](docs/ML_FORECAST.md)). `GET /api/v1/sensors/{id}/forecast` returns 15/30/60-minute margins, and `ForecastPublishJob` writes every trusted sensor's forecast to `sensor_forecasts` each minute. The Equipment page shows the platform forecast. **Missing:** analytics doesn't read `sensor_forecasts` yet, so `forecastMargin15C/30C/60C` and `predictedCondensationAt` in `GET /api/v1/equipment/status` are always null (Overview shows "–"); no `ANALYTICS:CONDENSATION_FORECAST` signal; the model is trained on simulated data only.
+- **FR3 (Partial).** Sensor-health problems become alerts through `alert_signals` (dedup per key, CLEARED handling, auto-resolve after a quiet period). An OPEN critical alert not acknowledged in 5 minutes escalates once and emails the managers. Live updates on `/topic/alerts` (the bell and Alerts page refresh without reload). **Missing:** analytics raises no `ANALYTICS:CONDENSATION_RISK` signals, so there are no condensation alerts yet, only sensor-fault alerts (`AlertTitles` already formats them).
+- **FR4 (Complete).** Acknowledge, resolve and corrective actions (type and notes) by technicians and admins, wrong-state requests get 409, a timeline in the UI, every step audited.
+- **FR5 (Complete).** Four roles (Technician, Operator, Manager, Admin) enforced on the server for every `/api/v1` path in both services (device ingestion is checked by its HMAC signature instead). BCrypt, lockout after 5 failures for 15 minutes, JWT shared by both services. Refusals are recorded as `ACCESS_DENIED`. The UI hides what a role can't do, but the server is the protection.
+- **FR6 (Complete).** SHA-256 hash chain built by a single worker from `audit_outbox`; verification against the chain head and checkpoints (managers and admins), nightly checkpoints (admins); a paged audit page showing each entry's `prevHash` and `hash`.
+- **FR7 (Complete).** `GET /api/v1/reports/summary`, `.csv` and `.pdf` (managers and admins) for a period and location: alerts opened (by severity), mean time to acknowledge and resolve, escalations, corrective actions by type. The CSV is RFC 4180 and formula-safe; the PDF (OpenPDF) carries a simulated-data note. The Reports page previews and downloads both. The "time in each risk level per equipment" section reads "not available yet" until analytics provides `riskSummary` (see Known issues).
+- **FR8 (Partial).** **Devices:** register (one-time secret), list, rotate the secret, change the reporting interval; simulator scenarios per sensor. **Equipment profiles:** `GET /api/v1/profiles` (everyone) and `PUT /api/v1/profiles/{id}` (admins), validated with clear 400 messages and audited as `PROFILE_UPDATED`. **Users:** list, unlock and change role, audited (`ACCOUNT_UNLOCKED`, `USER_ROLE_CHANGED`); V9 adds `enabled` and `last_login_at`. **Missing:** Administration › Equipment profiles only lists profiles; the UI has no edit form for the existing `PUT` endpoint.
+
+## Scope and Design Changes Since Phase 1
 
 | Change | Reason |
 |---|---|
@@ -295,9 +314,9 @@ Totals: 5 Complete (FR1, FR4–FR7), 3 Partial (FR2, FR3, FR8), 0 Not started.
 | Equipment-profile editing (FR8) moved to the audit owner (Anela); user administration was built by Joshua under decision 1 | Both endpoints were listed for "team" with no owner and the Administration page needed them. Every change is audited. |
 | Reports (FR7) are built in the alert area (Dumebi), with the per-equipment risk figures left to analytics | The report's numbers are mostly alert figures; `ReportService.riskFigures` is the one method analytics fills. |
 
-## Design patterns and principles applied
+## Design Patterns and Principles Applied
 
-| Pattern / principle | Where (classes) | Why (the problem it solves) |
+| Pattern / Principle | Where (classes) | Why (the problem it solves) |
 |---|---|---|
 | Transactional outbox | `audit_outbox`, written by `LoginAudit`, `OutboxAlertEvents`, `ProfileService`, `UserAdminService` and the platform's `JdbcAuditRecorder`; read only by `AuditChainWorker`. `alert_signals` works the same way (`JdbcSignalPublisher` → `SignalConsumer`) | Each event commits in the same transaction as the change it records, and the chain is built asynchronously, so no event is lost or invented and producers don't depend on the audit or alert service being up. |
 | State machine (enum with guards) | `AlertStatus` (`canAcknowledge`, `canResolve`, `canEscalate`, `sqlIn`); `AlertRepository` builds its SQL `WHERE` guards from it | One definition of the allowed transitions; a wrong-state request gets 409 instead of corrupting the alert, even when two users act at once. |
@@ -316,6 +335,19 @@ Totals: 5 Complete (FR1, FR4–FR7), 3 Partial (FR2, FR3, FR8), 0 Not started.
 
 ## Testing
 
+- **Unit tests:** JUnit 5 (with AssertJ) for the backend and platform, Vitest with Testing Library for the frontend.
+  227 JUnit tests run without Spring or a database (backend 148, platform 79): dew point, sensor-health rules,
+  risk model, alert states, signal processing, hash chain and verifier, profile and user-admin rules, report
+  figures and CSV/PDF output, HMAC signing, ingestion checks, simulator and forecaster. The frontend has 65 tests
+  in 9 files (pages on the mock backend, login, user admin, sensors, tables, components, API helpers).
+- **Integration tests:** 136 tests start Spring, MySQL 8.4 (Testcontainers, production SQL settings), a STOMP
+  client or an SMTP server (backend 106, platform 30). They cover sign-in and lockout, the platform → alert signal
+  contract, the alert lifecycle and escalation with email, the audit chain and verify over HTTP, ingestion over
+  HTTP, reports, user and profile administration, equipment status and the migrations. See
+  [Integration tests for the key workflows](#integration-tests-for-the-key-workflows).
+- **Coverage:** backend 95.9 % lines, platform 85.8 % lines (all modules aggregated), frontend 87.7 % lines, all
+  above the course's 70 % target. Details in [Results](#results).
+
 ### Commands
 
 ```bash
@@ -329,7 +361,10 @@ Coverage reports: `backend/target/site/jacoco/index.html`,
 `python3 scripts/coverage-summary.py <jacoco.csv>` prints the totals; CI prints them in the build log and the run
 summary for every pull request.
 
-### Results (run on `dev` @ `32cf981`, 2026-11-21)
+### Results
+
+Run on `dev` @ `32cf981` on 2026-11-21; the backend was run again on 2026-11-22 with V9 added to the
+applied-migration guard, with the same result.
 
 | Suite | Result | Line coverage | Branch coverage |
 |---|---|---|---|
@@ -362,7 +397,7 @@ Unit tests cover the domain classes directly: `DewPointTest` and `Psychrometrics
 `AnalyticsServiceTest`, `AlertStatusTest`, `SignalProcessorTest`, `HashChainTest`, `ChainVerifierTest`, `HmacTest`,
 `SimulatedSensorTest`, `ForecastTest` and the ingestion unit tests.
 
-## Known issues
+## Known Issues
 
 To address in QA. Open items with owners are in [docs/GAPS.md](docs/GAPS.md).
 
@@ -383,7 +418,6 @@ To address in QA. Open items with owners are in [docs/GAPS.md](docs/GAPS.md).
   - Most profile thresholds and risk budgets in V3/V8 are demo values without a cited source.
 - **Profile editing in the UI:** the `PUT /api/v1/profiles/{id}` API exists, but Administration › Equipment profiles
   only lists profiles (owner Joshua).
-- **V9 is not yet guarded:** it is added to `applied-migrations.txt` once it has been deployed to Aiven.
 - **Audit times** are stored as UTC `LocalDateTime`; switching to `Instant` waits until existing entries provably
   still verify. **Audit checkpoints** live in the same database the application writes.
 - **Duplicates to resolve:** the team `forecast` table versus `sensor_forecasts`, and the original `simulator/`
@@ -391,28 +425,26 @@ To address in QA. Open items with owners are in [docs/GAPS.md](docs/GAPS.md).
 - **No NIST control mapping document yet.** The design follows selected NIST SP 800-53 controls, but the mapping
   is still to be written.
 
-## Team contributions (Phase 3)
+## Team Contributions (Phase 3)
 
-Phase 3 here means the work merged into `dev` after the Phase 2 README (PR
-[#15](https://github.com/CS5010-team-404/corrosion-monitor/pull/15), 2026-11-19). Commit counts come from
-`git shortlog -sn --no-merges` on `origin/dev`, adding up each person's author names. PRs #19, #21 and #22 were
-squash-merged, so each counts as one commit however many it had.
+Phase 3 means commits after the Phase 2 submission on 2026-11-07, 21:30 PT. Anything merged into `dev` after that
+point is Phase 3 work: PRs [#13](https://github.com/CS5010-team-404/corrosion-monitor/pull/13) and
+[#15](https://github.com/CS5010-team-404/corrosion-monitor/pull/15)–[#23](https://github.com/CS5010-team-404/corrosion-monitor/pull/23).
+Commit counts come from `git shortlog -sn --no-merges --since="2026-11-07T21:30:00-08:00" origin/dev` (this phase)
+and the same command without `--since` (total), adding up each person's author names. Merge commits are not
+counted. PRs #13, #19, #21 and #22 were squash-merged, so each counts as one commit however many it had.
 
-| Member | Phase 3 contributions | Commits this phase | Commits total |
-|---|---|---|---|
-| Aayushee Bhat | No commits on `dev` this phase. Her analytics service from Phase 2 (`AnalyticsService`, `EquipmentStatusController`, `JdbcAnalyticsRepo`, `PeckRiskIndex`, `RiskAccumulator`, `RiskClassifier`, `TimeOfWetness`, `EquipmentStatusIntegrationTest`, V8; PR [#13](https://github.com/CS5010-team-404/corrosion-monitor/pull/13)) is what the Overview, the Equipment page and the alert titles read this phase. Her open items are listed under Known issues. | 0 | 2 |
-| Anela Quiroz | **Audit (FR6):** paged `GET /api/v1/audit` with `prevHash` and `hash`, `POST /api/v1/audit/verify` for managers and admins. **Equipment profiles (FR8):** `ProfileController`, `ProfileService`, `ProfileValidator`, `ProfileStore`, validated and audited (`PROFILE_UPDATED`). **Tests:** `AuditHttpTest`, `AuditChainIntegrationTest.twoWorkersDrainingAtOnceBuildOneIntactChain`, `ProfileValidatorTest`, `ProfileHttpTest`, `AuditViewsTest` extended. Docs: CONTRACTS, GAPS, traceability (PR [#21](https://github.com/CS5010-team-404/corrosion-monitor/pull/21)). Phase 3 README sections (PR [#23](https://github.com/CS5010-team-404/corrosion-monitor/pull/23)). Merged #16, #20 and #23. | 3 | 8 |
-| Dumebi Onyebuchi | **Reports (FR7):** `ReportController`, `ReportService`, `ReportCalculator`, `ReportRepository`, `ReportCsv`, `ReportPdf` (OpenPDF), and the Reports page wired to the endpoints. **Escalation email in production:** SMTP from the environment with timeouts, `MailManagerNotifierTest` with GreenMail. **Alert titles** with equipment and location (`AlertTitles`). **Tests:** `ReportCalculatorTest`, `ReportFilesTest`, `ReportIntegrationTest`, `MailManagerNotifierTest`. Docs: fixed roles and alert paths in `docs/1-api-contract.md`, GAPS, traceability (PR [#20](https://github.com/CS5010-team-404/corrosion-monitor/pull/20)). Merged #17 and #18. | 7 | 29 |
-| Joshua Dominick | **Platform (FR1, FR2):** `sensor_forecasts` and `ForecastPublishJob`, editable reporting interval (`PATCH /api/v1/admin/sensors/{id}`) with its Administration › Sensors dialog, sensor-health startup grace, platform integration tests on MySQL (PR [#18](https://github.com/CS5010-team-404/corrosion-monitor/pull/18)). **User administration (FR8):** `UserAdminController`, `UserAdminService`, `UserAdminRules`, V9, the Users tab (PR [#22](https://github.com/CS5010-team-404/corrosion-monitor/pull/22)). **Coverage and tests:** JaCoCo for the backend and an aggregate platform report, `npm run test:coverage`, coverage in CI; ingestion tests (`IngestionApiIntegrationTest` plus 12 unit tests, which found and fixed a duplicate-count bug), `PlatformApiIntegrationTest`, `SimulatorControlTest`, the `SignalContractTest` fixture across both services, and frontend page, login and table tests (PR [#19](https://github.com/CS5010-team-404/corrosion-monitor/pull/19)). **Frontend:** Overview and Equipment on the equipment-status endpoint and the V8 guard (PR [#16](https://github.com/CS5010-team-404/corrosion-monitor/pull/16)); dropdowns in a portal, server paging on the Audit page (PR [#17](https://github.com/CS5010-team-404/corrosion-monitor/pull/17)). Approved and merged #21; merged #19 and #22. | 16 | 66 |
+| Member | Contributions This Phase | Commits (this phase / total) |
+|---|---|---|
+| Aayushee Bhat | **Analytics service and equipment status endpoint, PR [#13](https://github.com/CS5010-team-404/corrosion-monitor/pull/13):** `GET /api/v1/equipment/status` (`EquipmentStatusController`, `AnalyticsService`, `AnalyticsRepo` / `JdbcAnalyticsRepo`, `EquipmentStatus`, `EquipmentSnap`): dew point and condensation margin from the shared `DewPoint`, a Peck corrosion risk index against each profile's risk budget, 24-hour time of wetness, and a NORMAL / WARNING / CRITICAL / UNKNOWN level from the profile thresholds, using only trusted sensors. Risk model classes `PeckRiskIndex`, `RiskAccumulator`, `RiskClassifier`, `RiskLevel`, `TimeOfWetness`. Migration V8 (profile kind, temperature range, surface offset). **Tests:** `PeckRiskIndexTest`, `RiskAccumulatorTest`, `RiskClassifierTest`, `TimeOfWetnessTest`, `AnalyticsServiceTest` (fake repository), `EquipmentStatusIntegrationTest` (real SQL on MySQL 8.4), and the platform's reference values added to `DewPointTest`. Updated her items in GAPS. The Overview, the Equipment page and the alert titles are built on this endpoint. | 1 / 2 |
+| Anela Quiroz | **Audit (FR6), PR [#21](https://github.com/CS5010-team-404/corrosion-monitor/pull/21):** paged `GET /api/v1/audit` with each entry's `prevHash` and `hash`, `POST /api/v1/audit/verify` for managers and admins. **Equipment profiles (FR8):** `ProfileController`, `ProfileService`, `ProfileValidator`, `ProfileStore`, with validated edits audited as `PROFILE_UPDATED`. **Tests:** `AuditHttpTest`, `AuditChainIntegrationTest.twoWorkersDrainingAtOnceBuildOneIntactChain`, `ProfileValidatorTest`, `ProfileHttpTest`, `AuditViewsTest` extended. Docs: CONTRACTS, GAPS, traceability. **README:** final edits to `Phase2_README.md` after the submission, and the first Phase 3 README sections (PR [#23](https://github.com/CS5010-team-404/corrosion-monitor/pull/23)). **Merged** #15, #16, #20 and #23. | 5 / 8 |
+| Dumebi Onyebuchi | **Reports (FR7), PR [#20](https://github.com/CS5010-team-404/corrosion-monitor/pull/20):** `ReportController`, `ReportService`, `ReportCalculator`, `ReportRepository`, `ReportCsv`, `ReportPdf` (OpenPDF), and the Reports page wired to the endpoints. **Escalation email in production:** SMTP from the environment with timeouts, best effort. **Alert titles** with equipment and location (`AlertTitles`). **Tests:** `ReportCalculatorTest`, `ReportFilesTest`, `ReportIntegrationTest` (signals → alerts → report), `MailManagerNotifierTest` (GreenMail). Docs: fixed roles and alert paths in `docs/1-api-contract.md`, GAPS, traceability. **Merged** #17 and #18. | 7 / 29 |
+| Joshua Dominick | **Platform (FR1, FR2), PR [#18](https://github.com/CS5010-team-404/corrosion-monitor/pull/18):** `sensor_forecasts` and `ForecastPublishJob`, the editable reporting interval (`PATCH /api/v1/admin/sensors/{id}`) and its Administration › Sensors dialog, sensor-health startup grace, platform integration tests on MySQL. **User administration (FR8), PR [#22](https://github.com/CS5010-team-404/corrosion-monitor/pull/22):** `UserAdminController`, `UserAdminService`, `UserAdminRules`, V9, the Users tab; tests `UserAdminControllerTest`, `UserAdminIntegrationTest`, `UserAdminRulesTest`. **Coverage and tests, PR [#19](https://github.com/CS5010-team-404/corrosion-monitor/pull/19):** JaCoCo for the backend and an aggregate platform report, `npm run test:coverage`, coverage in CI; ingestion tests (`IngestionApiIntegrationTest` plus 12 unit tests, which found and fixed a duplicate-count bug), `PlatformApiIntegrationTest`, `SimulatorControlTest`, the `SignalContractTest` fixture shared by both services, and frontend page, login and table tests. **Frontend:** Overview and Equipment on Aayushee's equipment-status endpoint, plus the V8 guard (PR [#16](https://github.com/CS5010-team-404/corrosion-monitor/pull/16)); dropdowns in a portal and server paging on the Audit page (PR [#17](https://github.com/CS5010-team-404/corrosion-monitor/pull/17)). **README:** the root README (PR [#15](https://github.com/CS5010-team-404/corrosion-monitor/pull/15)). **Reviews:** approved #13 and #21; merged #19, #21 and #22. | 17 / 66 |
 
 ### Earlier phases
 
-**Aayushee Bhat (analytics).** Built the analytics service in
-[backend/…/analytics](backend/src/main/java/com/team404/corrosion/analytics) and `GET /api/v1/equipment/status`: dew
-point and condensation margin, a Peck corrosion risk index against each profile's risk budget, 24-hour time of
-wetness, and a status level from the profile's thresholds, using only trusted sensors. Wrote the risk model classes
-with unit tests, an integration test against MySQL, and migration V8. PR
-[#13](https://github.com/CS5010-team-404/corrosion-monitor/pull/13).
+**Aayushee Bhat (analytics).** Before the Phase 3 cutoff her one commit on `dev` is an edit to
+[Phase2_README.md](Phase2_README.md) (`408c88b`). Phase 1 design work is not recorded in git.
 
 **Anela Quiroz (audit).** Built the audit service in
 [backend/…/audit](backend/src/main/java/com/team404/corrosion/audit): the worker that chains `audit_outbox` into the
@@ -437,11 +469,10 @@ shared JWT, four roles, demo users), the move to Flyway (V1–V3) with the appli
 [frontend/](frontend), and deployment on Render with Aiven ([render.yaml](render.yaml), Dockerfiles, CI for the
 platform and frontend, [scripts/](scripts)). PRs [#4](https://github.com/CS5010-team-404/corrosion-monitor/pull/4),
 [#9](https://github.com/CS5010-team-404/corrosion-monitor/pull/9),
-[#11](https://github.com/CS5010-team-404/corrosion-monitor/pull/11),
-[#12](https://github.com/CS5010-team-404/corrosion-monitor/pull/12) and the Phase 2 README
-([#15](https://github.com/CS5010-team-404/corrosion-monitor/pull/15)).
+[#11](https://github.com/CS5010-team-404/corrosion-monitor/pull/11) and
+[#12](https://github.com/CS5010-team-404/corrosion-monitor/pull/12).
 
-## Development workflow
+## Development Workflow
 
 - Branches: `feature/<name>-<topic>` (or `fix/`, `docs/`) from `dev`, merged back into `dev` by pull request.
   `main` changes only through the weekly release from `dev`.
