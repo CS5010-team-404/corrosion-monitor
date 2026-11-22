@@ -5,6 +5,10 @@
   <modelVersion>4.0.0</modelVersion>
   <parent><groupId>edu.neu.ecp</groupId><artifactId>ecp-platform-parent</artifactId><version>0.2.0-SNAPSHOT</version></parent>
   <artifactId>ecp-forecast</artifactId>
+  <properties>
+    <!-- scripts/train-model.sh runs the default; scripts/evaluate-real-data.sh overrides with -Dexec.mainClass -->
+    <exec.mainClass>edu.neu.ecp.forecast.train.Trainer</exec.mainClass>
+  </properties>
   <description>Condensation-margin forecaster (ridge regression + logistic early warning), trainer and bundled model. No Spring.</description>
   <dependencies>
     <dependency><groupId>edu.neu.ecp</groupId><artifactId>ecp-common</artifactId></dependency>
@@ -12,5 +16,5 @@
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
   </dependencies>
   <build><plugins><plugin><groupId>org.codehaus.mojo</groupId><artifactId>exec-maven-plugin</artifactId><version>3.5.0</version>
-    <configuration><mainClass>edu.neu.ecp.forecast.train.Trainer</mainClass></configuration></plugin></plugins></build>
+    <configuration><mainClass>${exec.mainClass}</mainClass></configuration></plugin></plugins></build>
 </project>

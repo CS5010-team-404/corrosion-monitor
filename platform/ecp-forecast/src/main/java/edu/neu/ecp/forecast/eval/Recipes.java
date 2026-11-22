@@ -97,15 +97,20 @@ public final class Recipes {
 
     static Choice choose(Gbt.Loss loss, double delta, List<double[]> xf, double[] yf, double[] wf,
                          List<double[]> xv, double[] yv) {
-        Choice best = null;
+        List<Gbt.Params> grid = new ArrayList<>();
         for (int depth : DEPTHS) {
             for (int leaf : MIN_LEAVES) {
-                Gbt.Params p = Gbt.Params.of(loss, depth, leaf).withHuberDelta(delta);
-                Gbt.Fit fit = Gbt.fit(xf, yf, wf, xv, yv, p);
-                double score = fit.validationCurve()[fit.bestTrees()];
-                if (best == null || score < best.score() - 1e-12) {
-                    best = new Choice(p, fit.bestTrees(), score, fit.model());
-                }
+                grid.add(Gbt.Params.of(loss, depth, leaf).withHuberDelta(delta));
+            }
+        }
+        // fitted in parallel, chosen in grid order (ties go to the earlier, simpler setting): deterministic
+        List<Gbt.Fit> fits = grid.parallelStream().map(p -> Gbt.fit(xf, yf, wf, xv, yv, p)).toList();
+        Choice best = null;
+        for (int i = 0; i < grid.size(); i++) {
+            Gbt.Fit fit = fits.get(i);
+            double score = fit.validationCurve()[fit.bestTrees()];
+            if (best == null || score < best.score() - 1e-12) {
+                best = new Choice(grid.get(i), fit.bestTrees(), score, fit.model());
             }
         }
         return best;

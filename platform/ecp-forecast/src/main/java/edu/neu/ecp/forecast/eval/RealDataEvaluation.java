@@ -92,20 +92,23 @@ public final class RealDataEvaluation {
     public static void main(String[] args) throws IOException {
         Path csv = Path.of("data/energydata_complete.csv");
         Path out = Path.of("docs/results");
+        Path models = Path.of("data/candidates"); // model files are large (GBT ~1.8 MB): kept out of git
         boolean quick = false;
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
                 case "--csv" -> csv = Path.of(args[++i]);
                 case "--out" -> out = Path.of(args[++i]);
+                case "--models" -> models = Path.of(args[++i]);
                 case "--quick" -> quick = true;
                 default -> throw new IllegalArgumentException("unknown option " + args[i]);
             }
         }
         Files.createDirectories(out);
+        Files.createDirectories(models);
         long start = System.nanoTime();
         Map<Integer, UciLoader.Location> data = UciLoader.load(csv);
         RealDataEvaluation ev = new RealDataEvaluation(data, quick);
-        String md = ev.run(csv, out);
+        String md = ev.run(csv, models);
         Files.writeString(out.resolve("real-data-results.md"), md);
         Files.writeString(out.resolve("real-data-metrics.csv"), ev.csv());
         Files.writeString(out.resolve("chosen-hyperparameters.csv"), ev.chosenCsv());
@@ -166,33 +169,37 @@ public final class RealDataEvaluation {
 
     /** The recipes to train for one experiment, by name. */
     Map<String, Predictor> train(Recipes.Split s, List<String> recipes, String tag) {
+        // recipes train in parallel; the map keeps the given order
+        List<Predictor> trained = recipes.parallelStream().map(r -> trainOne(s, r, tag)).toList();
         Map<String, Predictor> out = new LinkedHashMap<>();
-        for (String r : recipes) {
-            switch (r) {
-                case RIDGE_REAL -> {
-                    MarginForecaster f = Recipes.ridge(tag, s);
-                    note(tag, r, f.metrics());
-                    out.put(r, Models.ridge(r, f));
-                }
-                case RIDGE_SIM_REAL -> {
-                    MarginForecaster f = Recipes.ridge(tag, withSim(s));
-                    note(tag, r, f.metrics());
-                    out.put(r, Models.ridge(r, f));
-                }
-                case GBT_REAL -> {
-                    GbtForecaster f = Recipes.gbt(tag, s);
-                    note(tag, r, f.metrics());
-                    out.put(r, Models.gbt(r, f));
-                }
-                case GBT_SIM_REAL -> {
-                    GbtForecaster f = Recipes.gbt(tag, withSim(s));
-                    note(tag, r, f.metrics());
-                    out.put(r, Models.gbt(r, f));
-                }
-                default -> throw new IllegalArgumentException(r);
-            }
-        }
+        trained.forEach(p -> out.put(p.name(), p));
         return out;
+    }
+
+    private Predictor trainOne(Recipes.Split s, String r, String tag) {
+        return switch (r) {
+            case RIDGE_REAL -> {
+                MarginForecaster f = Recipes.ridge(tag, s);
+                note(tag, r, f.metrics());
+                yield Models.ridge(r, f);
+            }
+            case RIDGE_SIM_REAL -> {
+                MarginForecaster f = Recipes.ridge(tag, withSim(s));
+                note(tag, r, f.metrics());
+                yield Models.ridge(r, f);
+            }
+            case GBT_REAL -> {
+                GbtForecaster f = Recipes.gbt(tag, s);
+                note(tag, r, f.metrics());
+                yield Models.gbt(r, f);
+            }
+            case GBT_SIM_REAL -> {
+                GbtForecaster f = Recipes.gbt(tag, withSim(s));
+                note(tag, r, f.metrics());
+                yield Models.gbt(r, f);
+            }
+            default -> throw new IllegalArgumentException(r);
+        };
     }
 
     private synchronized void note(String tag, String recipe, Map<String, Object> m) {
@@ -282,7 +289,11 @@ public final class RealDataEvaluation {
     }
 
     /** A final candidate: the recipe trained on all real locations (plus simulated runs if the recipe uses them). */
-    record Candidate(String name, Predictor predictor, String json, double inferenceMs) {
+    record Candidate(String name, Predictor predictor, String json, double inferenceMs,
+                     java.util.function.Function<List<MarginPoint>, ?> forecast) {
+        Candidate(String name, Predictor predictor, String json, double inferenceMs) {
+            this(name, predictor, json, inferenceMs, null);
+        }
     }
 
     Candidate finalCandidate(String recipe) {
@@ -300,12 +311,12 @@ public final class RealDataEvaluation {
             GbtForecaster f = Recipes.gbt(version, s);
             note("final", recipe, f.metrics());
             GbtForecaster g = ModelIO.gbtFromJson(ModelIO.gbtToJson(f)); // score exactly what would be shipped
-            return new Candidate(recipe, Models.gbt(recipe, g), ModelIO.gbtToJson(f), inferenceMs(g::forecast));
+            return new Candidate(recipe, Models.gbt(recipe, g), ModelIO.gbtToJson(f), Double.NaN, g::forecast);
         }
         MarginForecaster f = Recipes.ridge(version, s);
         note("final", recipe, f.metrics());
         MarginForecaster g = ModelIO.fromJson(ModelIO.toJson(f));
-        return new Candidate(recipe, Models.ridge(recipe, g), ModelIO.toJson(f), inferenceMs(g::forecast));
+        return new Candidate(recipe, Models.ridge(recipe, g), ModelIO.toJson(f), Double.NaN, g::forecast);
     }
 
     /** Median wall time of one forecast (features + all models) over the simulated test histories, after warm-up. */
@@ -333,7 +344,7 @@ public final class RealDataEvaluation {
 
     // ------------------------------------------------------------------------------------------------ run + report
 
-    String run(Path csv, Path out) throws IOException {
+    String run(Path csv, Path models) throws IOException {
         StringBuilder md = new StringBuilder("# Real-data evaluation results (generated)\n\n")
                 .append("Generated by `scripts/evaluate-real-data.sh` (`edu.neu.ecp.forecast.eval.RealDataEvaluation`). ")
                 .append("Do not edit by hand; re-run to regenerate. Protocol: docs/ML_FORECAST.md.\n\n")
@@ -403,12 +414,12 @@ public final class RealDataEvaluation {
         for (Predictor p : fixedPredictors()) {
             sim.put(p.name(), onSim(p));
         }
-        List<Candidate> cands = new ArrayList<>();
-        for (String r : all) {
-            Candidate c = finalCandidate(r);
-            cands.add(c);
+        // trained in parallel; inference is timed afterwards, one candidate at a time, so timings are not disturbed
+        List<Candidate> cands = all.parallelStream().map(this::finalCandidate).toList().stream()
+                .map(c -> new Candidate(c.name(), c.predictor(), c.json(), inferenceMs(c.forecast()))).toList();
+        for (Candidate c : cands) {
             sim.put(c.name(), onSim(c.predictor()));
-            Files.writeString(out.resolve("candidate-" + c.name().replace(' ', '-').replace('+', '-') + ".json"),
+            Files.writeString(models.resolve("candidate-" + c.name().replace(' ', '-').replace('+', '-') + ".json"),
                     c.json());
         }
         sim.forEach((m, r) -> record("sim-test", Double.NaN, "all", m, r));
