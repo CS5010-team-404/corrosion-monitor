@@ -22,11 +22,16 @@ The detailed Phase 2 write-up is in [Phase2_README.md](Phase2_README.md).
 5. [Running the tests](#running-the-tests)
 6. [Try it end to end](#try-it-end-to-end)
 7. [Project status](#project-status)
-8. [Team contributions](#team-contributions)
-9. [Development workflow](#development-workflow)
-10. [Deployment](#deployment)
-11. [Documentation](#documentation)
-12. [Notes](#notes)
+8. [Scope and design changes since Phase 1](#scope-and-design-changes-since-phase-1)
+9. [Design patterns and principles applied](#design-patterns-and-principles-applied)
+10. [Testing (Phase 3)](#testing-phase-3)
+11. [Known issues](#known-issues)
+12. [Team contributions (Phase 3)](#team-contributions-phase-3)
+13. [Team contributions](#team-contributions)
+14. [Development workflow](#development-workflow)
+15. [Deployment](#deployment)
+16. [Documentation](#documentation)
+17. [Notes](#notes)
 
 ## Team
 
@@ -300,6 +305,80 @@ Phase 1 listed three roles; the team agreed on four (Technician, Operator, Manag
 - Audit: keep checkpoints somewhere the application cannot write.
 - First weekly release from `dev` to `main`, then security, sensor-failure and performance testing.
 - Final documentation, NIST control mapping and evaluation results.
+
+## Scope and design changes since Phase 1
+
+| Change | Reason |
+|---|---|
+| Four roles (Technician, Operator, Manager, Admin) instead of the three in Phase 1 | The alert workflow needs a technician who acknowledges and resolves alerts, apart from operators who only watch ([decision 4](docs/DECISIONS.md)). |
+| An `equipment` table: a location holds many equipment items, each with its own `equipment_profile` | The UI and the risk model work per equipment item, not per room ([decision 5](docs/DECISIONS.md)). |
+| The platform's `sensors` and `readings` tables replace the original `sensor`, `reading` and `used_nonce` tables; devices sign each request with a timestamp and HMAC instead of a stored nonce | Ingestion, sensor health and the forecaster already ran on the platform tables, and two copies would split the data ([decision 2](docs/DECISIONS.md)). |
+| The schema moved from `db/schema.sql` to Flyway migrations (V1–V8), and applied migrations are guarded by `MigrationChecksumTest` | A Docker init script runs only once and cannot run on Aiven; editing an applied migration stops the deployed backend from starting ([decision 6](docs/DECISIONS.md)). |
+| One JWT, issued by the backend and accepted by the platform | Both services and the UI need the same signed-in user and role ([decision 1](docs/DECISIONS.md)). |
+| Services write events to shared tables (`alert_signals`, `audit_outbox`) instead of calling each other | It keeps the services independent: a producer never waits for, or breaks because of, a consumer. |
+| Audit: every service writes `audit_outbox` in the same transaction as its change, and only the audit worker writes the hash chain (`audit_log`) | It gives one ordered chain with a single writer, and an event is never stored without its change (or the other way round). |
+| Audit verification also checks the chain head and saved checkpoints | The links alone cannot show that entries were cut off the end or that the whole chain was rewritten and re-hashed. |
+| Audit verify is open to managers as well as admins; checkpoints stay admin-only | This matches the agreed contract: managers own the audit review, and only admins manage checkpoints. |
+| Alert lifecycle is OPEN → ACKNOWLEDGED → RESOLVED (RESOLVED replaces CLOSED); alerts auto-resolve after a quiet period | A condition that clears on its own should not leave an alert open forever, and a returning condition opens a new alert. |
+| Equipment-profile editing (FR8) moved to the audit owner (Anela) | The endpoint had no owner and the Administration page needed it. Every change is audited, which fits the audit area. |
+| Deployment on Render with Aiven MySQL 8.4; tests run on MySQL 8.4 with Aiven's SQL settings | It's a free hosted demo, and the tests catch SQL that would only fail in production (ANSI quotes, strict mode, required primary keys). |
+
+## Design patterns and principles applied
+
+| Pattern / principle | Where | Why |
+|---|---|---|
+| Layered architecture (controller → service → repository) | Every backend area, e.g. `AlertController` → `AlertService` → `JdbcAlertStore`, `ProfileController` → `ProfileService` → `ProfileStore` | Rules and transactions stay out of the HTTP and SQL code, so each layer can be tested on its own. |
+| Repository | `AlertStore` / `JdbcAlertStore`, `AnalyticsRepo` / `JdbcAnalyticsRepo`, `AuditStore`, `ProfileStore`, `AppUserRepository` | All SQL for an area sits in one class, and the logic depends on an interface that tests replace with an in-memory version. |
+| Dependency injection (constructor injection) | All Spring components; `Clock` is injected in about 25 places | Collaborators and time can be swapped in tests (fixed clocks, fake stores) without touching the production code. |
+| Strategy | `ManagerNotifier` (`MailManagerNotifier`), `AlertBroadcaster` (`StompAlertBroadcaster`), `ReadingSender` (`HttpReadingSender`) in the simulator | The escalation rule, the alert service and the simulator don't depend on how mail, pushes or readings are delivered. |
+| Observer / publish–subscribe | `AlertEvents` (`OutboxAlertEvents`) pushes `{alertId, action}` to `/topic/alerts` after commit; the platform publishes on `/topic/readings` and `/topic/health` | Pages update live without polling hard, and a notice is only sent for a change that really committed. |
+| Transactional outbox | `audit_outbox` (written by `LoginAudit`, `OutboxAlertEvents`, `ProfileService`, the platform's `AuditRecorder`), `alert_signals` (`SignalPublisher`) | Writing the event in the same transaction as the change means neither can exist without the other, and the services stay decoupled. |
+| State machine | `AlertStatus` (`canAcknowledge`, `canResolve`, `canEscalate`); `AlertRepository` builds its SQL guards from the same rules | One definition of the allowed transitions; a wrong-state request gets 409 instead of corrupting the alert. |
+| Iterator | `AuditService.BatchedEntries` feeds `ChainVerifier` 1,000 rows at a time | The verifier walks a chain of any length in constant memory and doesn't know it's reading from a database. |
+| Pure domain logic, framework at the edges | `HashChain`, `ChainVerifier`, `ProfileValidator`, `PeckRiskIndex`, `TimeOfWetness`, `RiskClassifier`, `DewPoint`, `HealthEvaluator` | The maths and rules are plain Java with fast unit tests; Spring only appears in controllers, stores and configuration (a course rule in [CLAUDE.md](CLAUDE.md)). |
+| Single responsibility, single writer | `AuditChainWorker` is the only writer of `audit_log`; the alert service is the only consumer of `alert_signals` | Each table has one owner, so ordering and locking are decided in one place (`audit_chain_head` row lock). |
+| Defence in depth for access control | `SecurityConfig` role rules plus checks in `AuditController` and `ProfileController`; refusals recorded as `ACCESS_DENIED` | Hiding a button in the UI is never the only protection, and refused attempts leave an audit trail. |
+
+## Testing (Phase 3)
+
+The commands and the area-by-area list are in [Running the tests](#running-the-tests). Added this phase:
+
+- **Unit tests (JUnit 5):** `ProfileValidatorTest` (11 tests: every profile rule and its message), and `AuditViewsTest` extended for the paged response and the entry hashes.
+- **Integration tests (Spring Boot + MockMvc + Testcontainers, MySQL 8.4 with Aiven's settings):**
+  - `AuditHttpTest`: paging and hashes, page-size cap, verify for managers and admins, 403 for other roles, checkpoints admin-only with `ACCESS_DENIED` recorded, and a tampered chain reported broken.
+  - `AuditChainIntegrationTest.twoWorkersDrainingAtOnceBuildOneIntactChain`: two audit workers drain the outbox at the same time while rows keep arriving. The result is one intact chain with every event chained exactly once.
+  - `ProfileHttpTest`: every role can list profiles, only admins edit, invalid values get a 400 and change nothing, and a change writes `PROFILE_UPDATED` with the old and new values, which then verifies in the chain.
+  - Platform: integration tests on MySQL 8.4 with production settings (PR [#18](https://github.com/CS5010-team-404/corrosion-monitor/pull/18)).
+- **Backend result** (with the audit and profile work, branch `feature/anela-audit-profiles`, 2026-11-21): `mvn -B verify` → `Tests run: 206, Failures: 0, Errors: 0, Skipped: 0`.
+- **Platform result** (`dev`, 2026-11-21): `mvn -B -f platform/pom.xml verify` → 79 tests (common 7, simulator 11, forecast 6, health 25, app 30), 0 failures.
+- **Coverage:** on `dev`, JaCoCo reports only for the platform. Each module counts only its own tests: 67.9% of instructions and 66.1% of lines across the platform modules (forecast 93.0%, simulator 70.8%, app 68.4%, health 43.0%, common 15.4%; ingestion had no tests yet). The backend and frontend have no coverage report on `dev`. PR [#19](https://github.com/CS5010-team-404/corrosion-monitor/pull/19) adds JaCoCo to the backend, one aggregated platform report and `npm run test:coverage`. Update these numbers once it is merged; the course target is 70%.
+
+## Known issues
+
+These are known limitations on `dev` at the time of writing, to address in QA. Open items with owners are tracked in [docs/GAPS.md](docs/GAPS.md).
+
+- **Equipment history:** `GET /api/v1/equipment/{id}/assessments` doesn't exist yet, so the Equipment chart shows "Not built yet".
+- **Forecasts in equipment status:** the 15/30/60-minute margins and `predictedCondensationAt` are still empty. The platform publishes them every minute in `sensor_forecasts`; analytics doesn't read them yet.
+- **Condensation alerts:** analytics doesn't raise `ANALYTICS:CONDENSATION_RISK` or `CONDENSATION_FORECAST` signals yet, so only sensor-health problems become alerts. `/topic/risk` isn't published.
+- **In review, not yet on `dev`:** reports and CSV/PDF export (FR7, PR [#20](https://github.com/CS5010-team-404/corrosion-monitor/pull/20)), user administration (PR [#22](https://github.com/CS5010-team-404/corrosion-monitor/pull/22)), equipment-profile API and audit paging (PR [#21](https://github.com/CS5010-team-404/corrosion-monitor/pull/21)), and coverage reporting (PR [#19](https://github.com/CS5010-team-404/corrosion-monitor/pull/19)).
+- **Profile editing in the UI:** the API is in PR #21, but Administration › Equipment profiles only lists profiles; there is no edit form yet.
+- **Demo thresholds:** most profile thresholds and risk budgets in V3/V8 are demo values without a cited source (only the IT critical humidity cites ASHRAE).
+- **Audit times** are stored as UTC `LocalDateTime`. Switching to `Instant` waits until we can show that existing entries still verify.
+- **Audit checkpoints** are kept in the same database the application writes. A copy somewhere the app cannot write would protect against a full rewrite by someone with database access.
+- **Duplicates to resolve:** the team `forecast` table versus the platform's `sensor_forecasts`, and the original `simulator/` module versus `platform/ecp-simulator`.
+- **Out-of-date document:** [docs/1-api-contract.md](docs/1-api-contract.md) still mentions an Auditor role and `/alerts/{id}/ack`; the code follows [docs/CONTRACTS.md](docs/CONTRACTS.md).
+- **Forecaster data:** the model is trained on simulated data and still needs retraining on a real dataset.
+
+## Team contributions (Phase 3)
+
+Based on the pull requests opened since the Phase 2 README. Teammates, please check your own row before submission.
+
+| Member | Contributions this phase |
+|---|---|
+| Aayushee Bhat | Analytics service and `GET /api/v1/equipment/status` (dew point, condensation margin, Peck risk index, time of wetness, status level), risk classes with unit tests, `EquipmentStatusIntegrationTest`, and migration V8 (PR [#13](https://github.com/CS5010-team-404/corrosion-monitor/pull/13)). |
+| Anela Quiroz | Finished the audit service: paged `GET /api/v1/audit` with each entry's `prevHash` and `hash`, `POST /api/v1/audit/verify` for managers and admins. Built the equipment-profile API for FR8 (`ProfileController`, `ProfileService`, `ProfileValidator`, `ProfileStore`) with validated, audited edits (`PROFILE_UPDATED`). Tests: `AuditHttpTest`, the concurrent-workers test, `ProfileValidatorTest`, `ProfileHttpTest`. Updated CONTRACTS, GAPS, traceability and this README (PR [#21](https://github.com/CS5010-team-404/corrosion-monitor/pull/21)). |
+| Dumebi Onyebuchi | Reports: `ReportService`, `ReportCalculator`, CSV and PDF export (`ReportCsv`, `ReportPdf`) and `ReportController` for FR7, alert email and title improvements, with unit and integration tests (PR [#20](https://github.com/CS5010-team-404/corrosion-monitor/pull/20)). |
+| Joshua Dominick | Platform: forecast publishing to `sensor_forecasts` (FR2), sensor-health startup grace, editable reporting interval (FR1) with its Administration › Sensors screen, and platform integration tests on MySQL (PR [#18](https://github.com/CS5010-team-404/corrosion-monitor/pull/18)). UI on the equipment status endpoint (PR [#16](https://github.com/CS5010-team-404/corrosion-monitor/pull/16)), UI fixes including server paging on the Audit page (PR [#17](https://github.com/CS5010-team-404/corrosion-monitor/pull/17)), coverage reporting and new ingestion, API and frontend tests (PR [#19](https://github.com/CS5010-team-404/corrosion-monitor/pull/19)), user administration with migration V9 (PR [#22](https://github.com/CS5010-team-404/corrosion-monitor/pull/22)), and the Phase 2 root README (PR [#15](https://github.com/CS5010-team-404/corrosion-monitor/pull/15)). Reviewed and merged teammates' PRs. |
 
 ## Team contributions
 
