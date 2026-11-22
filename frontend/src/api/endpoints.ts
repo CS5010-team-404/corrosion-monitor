@@ -1,5 +1,6 @@
 import { api, patch, post, type Pending } from "../lib/api";
 import type * as T from "./types";
+import { DAY } from "../lib/format";
 
 // Every call the UI makes, in one file. Team backend paths are on the left of the split in docs/CONTRACTS.md;
 // data-platform paths (/api/v1/health, /api/v1/sensors, /api/v1/admin/simulator, /api/v1/admin/sensors) go to VITE_PLATFORM_URL.
@@ -23,15 +24,13 @@ export const login = async (email: string, password: string): Promise<T.LoginRes
 const pending = (key: string, what: string, endpoint: string, owner: string): Pending => ({ key, what, endpoint, owner });
 export const PENDING = {
   assessments: pending("assessments", "Equipment history", "GET /api/v1/equipment/{id}/assessments", "Aayushee"),
-  reportSummary: pending("reportSummary", "The report summary", "GET /api/v1/reports/summary", "Aayushee with Dumebi"),
-  reportCsv: pending("reportCsv", "The CSV report", "GET /api/v1/reports/summary.csv", "Aayushee with Dumebi"),
-  reportPdf: pending("reportPdf", "The PDF report", "GET /api/v1/reports/summary.pdf", "Aayushee with Dumebi"),
   profiles: pending("profiles", "Equipment profiles", "GET /api/v1/profiles", "team"),
   users: pending("users", "The user list", "GET /api/v1/admin/users", "team"),
 } as const;
 
+// The picker's `to` is the start of the last chosen day; the backend's period is [from, to), so send the end of that day.
 const range = (from: number | null, to: number | null, location: string) =>
-  q({ from: from ? new Date(from).toISOString() : null, to: to ? new Date(to).toISOString() : null, location: location === "all" ? null : location });
+  q({ from: from ? new Date(from).toISOString() : null, to: to ? new Date(to + DAY).toISOString() : null, location: location === "all" ? null : location });
 
 // analytics (Aayushee)
 export const equipmentStatus = () => api<T.EquipmentStatus[]>("/api/v1/equipment/status");
@@ -73,11 +72,11 @@ export const auditPage = async (params: AuditQuery): Promise<T.AuditPage & { pag
 export const AUDIT_MAX_PAGE = 200;
 export const verifyChain = () => post<T.ChainVerification>("/api/v1/audit/verify");
 
-// reports (Aayushee with Dumebi)
+// reports (Dumebi; risk figures from Aayushee)
 export const reportSummary = (from: number | null, to: number | null, location: string) =>
-  api<T.ReportSummary>(`/api/v1/reports/summary${range(from, to, location)}`, {}, PENDING.reportSummary);
+  api<T.ReportSummary>(`/api/v1/reports/summary${range(from, to, location)}`, {});
 export const reportFile = (kind: "csv" | "pdf", from: number | null, to: number | null, location: string) =>
-  api<Blob>(`/api/v1/reports/summary.${kind}${range(from, to, location)}`, {}, kind === "csv" ? PENDING.reportCsv : PENDING.reportPdf);
+  api<Blob>(`/api/v1/reports/summary.${kind}${range(from, to, location)}`, {});
 
 // configuration (team)
 export const profiles = () => api<T.Profile[]>("/api/v1/profiles", {}, PENDING.profiles);

@@ -10,7 +10,12 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Component;
 
-/** Emails the managers (MailHog locally; Render has no SMTP server, so a failure is logged and nothing else). */
+/**
+ * Emails the managers when an alert escalates. The SMTP server comes from {@code SPRING_MAIL_*} (MailHog locally, a
+ * hosted SMTP service in production, see docs/DEPLOYMENT.md) and the sender address from
+ * {@code ECP_ALERTS_MAIL_FROM}. Best effort: the escalation is already saved, so any failure is logged and nothing
+ * else happens, and the SMTP timeouts in application.properties bound how long a send can take.
+ */
 @Component
 public class MailManagerNotifier implements ManagerNotifier {
 
@@ -27,12 +32,21 @@ public class MailManagerNotifier implements ManagerNotifier {
 
     @Override
     public void escalated(AlertView alert, List<String> managerEmails) {
-        JavaMailSender sender = mail.getIfAvailable();
-        if (sender == null || managerEmails.isEmpty()) {
-            log.warn("Alert {} escalated but nobody was emailed (mail sender: {}, managers: {})", alert.id(),
-                    sender != null, managerEmails.size());
-            return;
+        try {
+            JavaMailSender sender = mail.getIfAvailable();
+            if (sender == null || managerEmails.isEmpty()) {
+                log.warn("Alert {} escalated but nobody was emailed (mail sender: {}, managers: {})", alert.id(),
+                        sender != null, managerEmails.size());
+                return;
+            }
+            sender.send(message(alert, managerEmails));
+            log.info("Emailed {} manager(s) about escalated alert {}", managerEmails.size(), alert.id());
+        } catch (RuntimeException e) {
+            log.warn("Could not email managers about alert {}: {}", alert.id(), e.toString());
         }
+    }
+
+    SimpleMailMessage message(AlertView alert, List<String> managerEmails) {
         var message = new SimpleMailMessage();
         message.setFrom(from);
         message.setTo(managerEmails.toArray(String[]::new));
@@ -46,10 +60,6 @@ public class MailManagerNotifier implements ManagerNotifier {
                 """.formatted(alert.id(), alert.message() == null ? alert.title() : alert.message(),
                 alert.equipmentName() == null ? "n/a" : alert.equipmentName(),
                 alert.locationName() == null ? "n/a" : alert.locationName(), alert.openedAt()));
-        try {
-            sender.send(message);
-        } catch (RuntimeException e) {
-            log.warn("Could not email managers about alert {}: {}", alert.id(), e.toString());
-        }
+        return message;
     }
 }
