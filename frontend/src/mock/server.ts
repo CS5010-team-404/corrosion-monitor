@@ -53,7 +53,7 @@ const actor = () => ({ ADMIN: "admin", MANAGER: "manager", OPERATOR: "operator",
 
 function levels(from: number | null, to: number | null, loc: string | null) {
   return S.eq.filter((e: any) => !loc || e.loc === loc).map((e: any) => {
-    const pts = e.hist.filter((x: any) => (!from || x.ts >= from) && (!to || x.ts <= to + 86400000));
+    const pts = e.hist.filter((x: any) => (!from || x.ts >= from) && (!to || x.ts < to));
     let ok = 0, w = 0, c = 0;
     pts.forEach((x: any) => { const m = x.surface - x.dew; if (m <= e.prof.mCrit || x.rh >= e.prof.rhCrit) c++; else if (m <= e.prof.mWarn || x.rh >= e.prof.rhWarn) w++; else ok++; });
     const n = Math.max(1, pts.length);
@@ -130,7 +130,7 @@ async function handle(path: string, init: RequestInit): Promise<unknown> {
   if (p === "/api/v1/reports/summary" || p === "/api/v1/reports/summary.csv" || p === "/api/v1/reports/summary.pdf") {
     const from = qp.get("from") ? Date.parse(qp.get("from")!) : null, to = qp.get("to") ? Date.parse(qp.get("to")!) : null, loc = qp.get("location");
     const eqIds = new Set(S.eq.filter((e: any) => !loc || e.loc === loc).map((e: any) => e.id));
-    const al = S.alerts.filter((a: any) => eqIds.has(a.eqId) && (!from || a.opened >= from) && (!to || a.opened < to + 86400000));
+    const al = S.alerts.filter((a: any) => eqIds.has(a.eqId) && (!from || a.opened >= from) && (!to || a.opened < to));
     const acked = al.filter((a: any) => a.ack);
     const summary: T.ReportSummary = { from: iso(from), to: iso(to), alertsOpened: al.length, meanMinutesToAcknowledge: acked.length ? acked.reduce((s: number, a: any) => s + (a.ack - a.opened), 0) / acked.length / 60000 : null,
       correctiveActions: al.reduce((s: number, a: any) => s + a.actions.length, 0), equipment: levels(from, to, loc) };

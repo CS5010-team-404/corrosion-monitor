@@ -67,9 +67,9 @@ describe("endpoints that aren't built yet", () => {
 
 describe("not built yet panel", () => {
   it("shows the calm panel with endpoint and owner instead of the error state", () => {
-    render(createElement(ErrorState, { error: new NotBuiltError(404, PENDING.reportSummary), onRetry: () => {} }));
+    render(createElement(ErrorState, { error: new NotBuiltError(404, PENDING.profiles), onRetry: () => {} }));
     expect(screen.getByText("Not built yet")).toBeTruthy();
-    expect(screen.getByText(/It needs GET \/api\/v1\/reports\/summary \(owner: Aayushee with Dumebi\)/)).toBeTruthy();
+    expect(screen.getByText(/It needs GET \/api\/v1\/profiles \(owner: team\)/)).toBeTruthy();
     expect(screen.queryByText("Could not load this page")).toBeNull();
   });
 });
