@@ -1,4 +1,4 @@
-import { api, post, type Pending } from "../lib/api";
+import { api, patch, post, type Pending } from "../lib/api";
 import type * as T from "./types";
 
 // Every call the UI makes, in one file. Team backend paths are on the left of the split in docs/CONTRACTS.md;
@@ -28,7 +28,6 @@ export const PENDING = {
   reportCsv: pending("reportCsv", "The CSV report", "GET /api/v1/reports/summary.csv", "Aayushee with Dumebi"),
   reportPdf: pending("reportPdf", "The PDF report", "GET /api/v1/reports/summary.pdf", "Aayushee with Dumebi"),
   profiles: pending("profiles", "Equipment profiles", "GET /api/v1/profiles", "team"),
-  users: pending("users", "The user list", "GET /api/v1/admin/users", "team"),
 } as const;
 
 const range = (from: number | null, to: number | null, location: string) =>
@@ -70,4 +69,8 @@ export const reportFile = (kind: "csv" | "pdf", from: number | null, to: number 
 
 // configuration (team)
 export const profiles = () => api<T.Profile[]>("/api/v1/profiles", {}, PENDING.profiles);
-export const users = () => api<T.User[]>("/api/v1/admin/users", {}, PENDING.users);
+
+// users (admin only; team backend)
+export const users = () => api<T.User[]>("/api/v1/admin/users");
+export const unlockUser = (id: number) => post<T.User>(`/api/v1/admin/users/${id}/unlock`);
+export const setUserRole = (id: number, role: T.Role) => patch<T.User>(`/api/v1/admin/users/${id}`, { role });

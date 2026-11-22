@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { PENDING, alerts, equipmentStatus, profiles, sensorsHealth, users } from "../api/endpoints";
+import { PENDING, alerts, equipmentStatus, profiles, sensorsHealth } from "../api/endpoints";
 import { ApiError, NotBuiltError, isSample } from "../lib/api";
 import { config } from "../lib/config";
 import { ErrorState } from "../components/ui";
@@ -30,7 +30,7 @@ describe("endpoints that aren't built yet", () => {
 
   it("treats 501 the same way", async () => {
     fetchMock.mockResolvedValue(respond(501));
-    await expect(users()).rejects.toMatchObject({ status: 501, pending: PENDING.users });
+    await expect(profiles()).rejects.toMatchObject({ status: 501, pending: PENDING.profiles });
   });
 
   it("never treats a real (platform) endpoint's 404 as not built, and never falls back for it", async () => {

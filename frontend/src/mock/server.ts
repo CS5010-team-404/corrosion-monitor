@@ -12,8 +12,20 @@ const sim: any = simJs;
 const { S } = sim;
 const iso = (t: number | null | undefined) => (t == null ? null : new Date(t).toISOString());
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-let failedLogins = 0;
+let failedLogins = 0; // unknown emails only; demo accounts count their own failures
 let actionSeq = 1;
+
+// app_user for the mock: the four demo accounts, with their own failure counts and locks.
+interface MockUser { id: number; email: string; fullName: string; role: T.Role; enabled: boolean; failed: number; lockedUntil: string | null; lastLoginAt: string | null }
+const DEMO_EMAIL: Record<string, string> = { ADMIN: "admin@corrosionwatch.app", MANAGER: "manager@corrosionwatch.app", OPERATOR: "operator@corrosionwatch.app", TECHNICIAN: "tech@corrosionwatch.app" };
+const users: MockUser[] = Object.entries(sim.ROLE_NAMES as Record<string, string>).map(([r, n], i) => ({
+  id: i + 1, email: DEMO_EMAIL[r], fullName: n, role: r as T.Role, enabled: true, failed: 0, lockedUntil: null, lastLoginAt: iso(Date.now() - (i + 1) * 3600e3),
+}));
+const userView = (u: MockUser): T.User => ({
+  id: u.id, username: u.email, fullName: u.fullName, email: u.email, role: u.role, enabled: u.enabled,
+  lockedUntil: u.lockedUntil && Date.parse(u.lockedUntil) > Date.now() ? u.lockedUntil : null, lastLoginAt: u.lastLoginAt,
+});
+const sessionEmail = () => (sessionStorage.getItem("cw.session") ? String(JSON.parse(sessionStorage.getItem("cw.session")!).username) : "admin@corrosionwatch.app");
 
 const eqById = (id: number) => S.eq.find((e: any) => e.id === id);
 const sensorIdOf = (e: any) => S.eq.indexOf(e) + 1;
@@ -71,19 +83,20 @@ async function handle(path: string, init: RequestInit): Promise<unknown> {
 
   if (p === "/api/v1/auth/login") {
     // Same contract as the backend: the four demo emails (any password here), one message for unknown email and
-    // wrong password, and the fifth failure locks the account (423). The password "wrong" counts as a failure.
-    const locked = () => new ApiError(423, `Account locked after 5 failed sign-ins. Try again after ${iso(Date.now() + 15 * 60e3)} (UTC).`);
-    if (failedLogins >= 5) throw locked();
-    const roles: Record<string, T.Role> = { "admin@corrosionwatch.app": "ADMIN", "manager@corrosionwatch.app": "MANAGER", "operator@corrosionwatch.app": "OPERATOR", "tech@corrosionwatch.app": "TECHNICIAN" };
+    // wrong password, and the fifth failure locks that account (423) until an admin unlocks it or 15 minutes pass.
+    // The password "wrong" counts as a failure.
     const email = String(body.email ?? "").trim().toLowerCase();
-    const r = roles[email];
-    if (!r || body.password === "wrong") {
-      if (++failedLogins >= 5) throw locked();
+    const u = users.find((x) => x.email === email);
+    const locked = (until: number) => new ApiError(423, `Account locked after 5 failed sign-ins. Try again after ${iso(until)} (UTC).`);
+    if (u?.lockedUntil && Date.parse(u.lockedUntil) > Date.now()) throw locked(Date.parse(u.lockedUntil));
+    if (!u) { if (++failedLogins >= 5) throw locked(Date.now() + 15 * 60e3); throw new ApiError(401, "Incorrect email or password."); }
+    if (body.password === "wrong") {
+      if (++u.failed >= 5) { u.lockedUntil = iso(Date.now() + 15 * 60e3); sim.addAudit(email, "ACCOUNT_LOCKED", "user", u.id); throw locked(Date.now() + 15 * 60e3); }
       throw new ApiError(401, "Incorrect email or password.");
     }
-    failedLogins = 0;
-    sim.addAudit(email, "USER_LOGIN", "user", email);
-    return { token: `mock.${r}`, expiresAt: iso(Date.now() + 8 * 3600e3), email, fullName: sim.ROLE_NAMES[r], role: r };
+    u.failed = 0; u.lockedUntil = null; u.lastLoginAt = iso(Date.now());
+    sim.addAudit(email, "USER_LOGIN", "user", u.id);
+    return { token: `mock.${u.role}`, expiresAt: iso(Date.now() + 8 * 3600e3), email, fullName: u.fullName, role: u.role };
   }
   if (p === "/api/v1/equipment/status") return S.eq.map(status);
   if ((m = p.match(/^\/api\/v1\/equipment\/(\d+)\/assessments$/))) {
@@ -142,7 +155,27 @@ async function handle(path: string, init: RequestInit): Promise<unknown> {
     return summary;
   }
   if (p === "/api/v1/profiles") return Object.values(sim.PROFILES).map((x: any, i: number) => ({ id: i + 1, name: x.name, rhWarningPct: x.rhWarn, rhCriticalPct: x.rhCrit, marginWarningC: x.mWarn, marginCriticalC: x.mCrit, tempMinC: x.tMin, tempMaxC: x.tMax, surfaceOffsetC: x.offset }));
-  if (p === "/api/v1/admin/users") return Object.entries(sim.ROLE_NAMES).map(([r, n]: [string, any], i) => ({ id: i + 1, username: ({ ADMIN: "admin", MANAGER: "manager", OPERATOR: "operator", TECHNICIAN: "tech" } as any)[r], fullName: n, email: null, role: r, enabled: true, lockedUntil: null, lastLoginAt: iso(sim.now() - (i + 1) * 3600e3) }));
+  if (p === "/api/v1/admin/users") return users.map(userView);
+  if ((m = p.match(/^\/api\/v1\/admin\/users\/(\d+)(\/unlock)?$/))) {
+    // Same rules as the backend's UserAdminService: audited, no self-demotion, never remove the last admin.
+    const u = users.find((x) => x.id === +m![1]);
+    if (!u) throw new ApiError(404, `No user with id ${m[1]}.`);
+    const me = sessionEmail();
+    if (m[2] && method === "POST") {
+      if (u.failed || u.lockedUntil) { u.failed = 0; u.lockedUntil = null; sim.addAudit(me, "ACCOUNT_UNLOCKED", "user", u.id); }
+      return userView(u);
+    }
+    if (method === "PATCH") {
+      const to = String(body.role ?? "").toUpperCase() as T.Role;
+      if (!["TECHNICIAN", "OPERATOR", "MANAGER", "ADMIN"].includes(to)) throw new ApiError(400, "role must be one of TECHNICIAN, OPERATOR, MANAGER, ADMIN.");
+      if (u.role === "ADMIN" && to !== "ADMIN") {
+        if (u.email === me) throw new ApiError(409, "You can't remove your own administrator role. Ask another administrator to change it.");
+        if (!users.some((x) => x !== u && x.role === "ADMIN" && x.enabled)) throw new ApiError(409, "This is the last administrator. Make someone else an administrator before changing this role.");
+      }
+      if (u.role !== to) { sim.addAudit(me, "USER_ROLE_CHANGED", "user", u.id); u.role = to; }
+      return userView(u);
+    }
+  }
   throw new ApiError(404, `Mock has no handler for ${method} ${p}`);
 }
 
