@@ -16,6 +16,7 @@ import com.team404.corrosion.auth.LoginAudit;
 import com.team404.corrosion.auth.Role;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,7 +37,10 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @SpringBootTest(properties = {
         "ecp.security.jwt-secret=test-only-jwt-secret-for-backend-tests-0001",
         "ecp.demo.password=" + UserAdminIntegrationTest.PASSWORD,
-        "ecp.audit.scheduler.enabled=false"})
+        "ecp.audit.scheduler.enabled=false",
+        // no background jobs: after this class its container stops but Spring keeps the context cached, and a job
+        // still polling the dead database blocks JVM exit for Hikari's 30 s connection timeout
+        "ecp.alerts.scheduler.enabled=false"})
 @Testcontainers
 class UserAdminIntegrationTest {
 
@@ -153,16 +157,28 @@ class UserAdminIntegrationTest {
 
     @Test
     void signInRecordsLastLoginAtInUtc() {
+        LocalDateTime before = utcNow().minusSeconds(1);
         assertThat(auth.login("operator@corrosionwatch.app", PASSWORD))
                 .isInstanceOf(AuthService.LoginResult.Success.class);
+        LocalDateTime after = utcNow().plusSeconds(1);
 
         Map<String, Object> row = jdbc.queryForMap(
                 "SELECT last_login_at, UTC_TIMESTAMP(3) AS now_utc FROM app_user WHERE email = ?",
                 "operator@corrosionwatch.app");
+        // UTC wall time of the sign-in, by the JVM clock that wrote it (immune to Docker clock drift)
+        assertThat((LocalDateTime) row.get("last_login_at")).isBetween(before, after);
+        // loosely against the database's clock: drift is seconds to minutes, a time-zone mistake at least an hour
         Duration age = Duration.between((LocalDateTime) row.get("last_login_at"), (LocalDateTime) row.get("now_utc"));
-        assertThat(age).isBetween(Duration.ZERO, Duration.ofMinutes(1));
+        assertThat(age.abs()).isLessThan(CLOCK_TOLERANCE);
         assertThat(service.list()).filteredOn(u -> u.email().equals("operator@corrosionwatch.app")).singleElement()
                 .satisfies(u -> assertThat(u.lastLoginAt()).isNotNull());
+    }
+
+    /** Host vs Docker VM clock drift allowance; any real time-zone error is at least an hour. */
+    static final Duration CLOCK_TOLERANCE = Duration.ofMinutes(10);
+
+    private static LocalDateTime utcNow() {
+        return LocalDateTime.now(ZoneOffset.UTC);
     }
 
     private JsonNode readJson(Map<String, Object> row) {

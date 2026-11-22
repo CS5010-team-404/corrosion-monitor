@@ -33,7 +33,10 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @SpringBootTest(properties = {
         "ecp.security.jwt-secret=test-only-jwt-secret-for-backend-tests-0001",
         "ecp.demo.password=demo-password-for-tests",
-        "ecp.audit.scheduler.enabled=false"})
+        "ecp.audit.scheduler.enabled=false",
+        // no background jobs: after this class its container stops but Spring keeps the context cached, and a job
+        // still polling the dead database blocks JVM exit for Hikari's 30 s connection timeout
+        "ecp.alerts.scheduler.enabled=false"})
 @AutoConfigureMockMvc
 @Testcontainers
 class UserAdminControllerTest {

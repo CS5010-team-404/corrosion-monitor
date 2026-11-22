@@ -8,6 +8,7 @@ import edu.neu.ecp.platform.MySqlIntegrationTest;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -16,6 +17,9 @@ import org.springframework.context.ApplicationContext;
 
 /** FR2: the forecast publisher writes sensor_forecasts, the contract table analytics reads. */
 class ForecastPublishingIntegrationTest extends MySqlIntegrationTest {
+
+    /** Host vs Docker VM clock drift allowance; any real time-zone error is at least 3600 s. */
+    static final double CLOCK_TOLERANCE_S = 600;
 
     @Autowired
     ForecastPublisher publisher;
@@ -62,8 +66,13 @@ class ForecastPublishingIntegrationTest extends MySqlIntegrationTest {
         assertThat(number(row, "margin_60_c")).isCloseTo(api.margin60C(), within(0.01));
         assertThat(number(row, "warning_probability_30")).isCloseTo(api.risk30(), within(0.0001));
         assertThat(number(row, "warning_probability_60")).isCloseTo(api.risk60(), within(0.0001));
-        // stored in UTC: computed_at is "now" by the database's own UTC clock, whatever the JVM's time zone
-        assertThat(number(row, "age_s")).isBetween(-5.0, 60.0);
+        // stored in UTC whatever the JVM's time zone: the stored wall time is exactly the publisher's instant in UTC.
+        // Same clock on both sides, so Docker's VM clock drifting from the host cannot fail this check.
+        Instant computedAt = written.stream().filter(f -> f.sensorId() == trusted).findFirst().orElseThrow().computedAt();
+        assertThat((LocalDateTime) row.get("computed_at")).isEqualTo(LocalDateTime.ofInstant(computedAt, ZoneOffset.UTC));
+        // and against the database's own UTC clock, loosely: the container's clock may drift from the host by seconds
+        // to minutes, while a time-zone mistake is off by at least an hour
+        assertThat(number(row, "age_s")).isBetween(-CLOCK_TOLERANCE_S, CLOCK_TOLERANCE_S);
     }
 
     @Test

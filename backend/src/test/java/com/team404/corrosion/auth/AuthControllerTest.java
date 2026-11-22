@@ -12,6 +12,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.team404.corrosion.AivenMySql;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -34,7 +37,10 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @SpringBootTest(properties = {
         "ecp.security.jwt-secret=test-only-jwt-secret-for-backend-tests-0001",
         "ecp.demo.password=" + AuthControllerTest.PASSWORD,
-        "ecp.audit.scheduler.enabled=false"})
+        "ecp.audit.scheduler.enabled=false",
+        // no background jobs: after this class its container stops but Spring keeps the context cached, and a job
+        // still polling the dead database blocks JVM exit for Hikari's 30 s connection timeout
+        "ecp.alerts.scheduler.enabled=false"})
 @AutoConfigureMockMvc
 @Testcontainers
 class AuthControllerTest {
@@ -105,20 +111,24 @@ class AuthControllerTest {
         for (int i = 0; i < 4; i++) {
             login(email, "nope").andExpect(status().isUnauthorized());
         }
+        LocalDateTime before = LocalDateTime.now(ZoneOffset.UTC).minusSeconds(1);
         login(email, "nope")
                 .andExpect(status().isLocked())
                 .andExpect(jsonPath("$.error").value("ACCOUNT_LOCKED"))
                 .andExpect(jsonPath("$.message").value(containsString("Try again after")))
                 .andExpect(jsonPath("$.lockedUntil").isNotEmpty());
+        LocalDateTime after = LocalDateTime.now(ZoneOffset.UTC).plusSeconds(1);
         login(email, PASSWORD).andExpect(status().isLocked());
 
         Map<String, Object> row = jdbc.queryForMap(
                 "SELECT failed_logins, locked_until, UTC_TIMESTAMP(3) AS now_utc FROM app_user WHERE email = ?", email);
         assertThat(row.get("failed_logins")).isEqualTo(5);
-        // stored in UTC: about 15 minutes after the database's UTC clock, whatever the JVM's time zone
-        long minutes = java.time.Duration.between(((java.time.LocalDateTime) row.get("now_utc")),
-                ((java.time.LocalDateTime) row.get("locked_until"))).toMinutes();
-        assertThat(minutes).isBetween(14L, 15L);
+        // stored in UTC, 15 minutes after the fifth failure by the JVM clock that wrote it (immune to Docker drift)
+        LocalDateTime lockedUntil = (LocalDateTime) row.get("locked_until");
+        assertThat(lockedUntil).isBetween(before.plusMinutes(15), after.plusMinutes(15));
+        // loosely against the database's UTC clock: drift is seconds to minutes, a time-zone mistake at least an hour
+        Duration fromDbNow = Duration.between((LocalDateTime) row.get("now_utc"), lockedUntil);
+        assertThat(fromDbNow.minusMinutes(15).abs()).isLessThan(Duration.ofMinutes(10));
 
         List<String> actions = jdbc.queryForList(
                 "SELECT action FROM audit_outbox WHERE actor = ? ORDER BY id", String.class, email);
