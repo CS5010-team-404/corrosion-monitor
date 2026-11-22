@@ -84,6 +84,12 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
+        <!-- PDF report (GET /api/v1/reports/summary.pdf). 2.0.x keeps the com.lowagie packages and runs on Java 17. -->
+        <dependency>
+            <groupId>com.github.librepdf</groupId>
+            <artifactId>openpdf</artifactId>
+            <version>2.0.3</version>
+        </dependency>
 
         <!-- Testing -->
         <dependency>
@@ -111,6 +117,13 @@
             <artifactId>mysql</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- In-memory SMTP server for the escalation email test -->
+        <dependency>
+            <groupId>com.icegreen</groupId>
+            <artifactId>greenmail-junit5</artifactId>
+            <version>2.1.3</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -126,6 +139,17 @@
                             <goal>repackage</goal>
                         </goals>
                     </execution>
+                </executions>
+            </plugin>
+            <!-- Coverage: the agent runs with the tests; `mvn verify` writes target/site/jacoco (index.html, jacoco.csv).
+                 scripts/coverage-summary.py prints the totals (CI does). -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.12</version>
+                <executions>
+                    <execution><id>prepare-agent</id><goals><goal>prepare-agent</goal></goals></execution>
+                    <execution><id>report</id><phase>verify</phase><goals><goal>report</goal></goals></execution>
                 </executions>
             </plugin>
         </plugins>

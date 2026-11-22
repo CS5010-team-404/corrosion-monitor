@@ -21,7 +21,7 @@ deployment). Read `docs/ARCHITECTURE.md` and `docs/CONTRACTS.md` before changing
 
 ## Commands
 ```
-mvn -B -f platform/pom.xml verify                 # platform build + tests (79 tests, MySQL via Testcontainers), JaCoCo report
+mvn -B -f platform/pom.xml verify                 # platform build + tests (109 tests, MySQL via Testcontainers), JaCoCo report
 docker compose -f docker-compose.platform.yml up --build
 cd frontend && npm install && npm run dev        # UI on :5173, proxies to :8080 (backend) and :8081 (platform)
 cd frontend && npm run dev:mock                  # UI on the built-in mock backend, no Java needed

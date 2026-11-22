@@ -5,18 +5,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import edu.neu.ecp.common.domain.Hmac;
 import edu.neu.ecp.common.domain.Topics;
 import edu.neu.ecp.common.live.LiveUpdates;
-import java.sql.PreparedStatement;
-import java.sql.SQLException;
-import java.sql.Statement;
 import java.sql.Timestamp;
-import java.sql.Types;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -97,14 +93,8 @@ public class IngestionService {
             return reject(deviceId, s.id(), now, 400, "INVALID_PAYLOAD", problem);
         }
 
-        int[] counts = insert(s.id(), payload.readings(), now);
-        int duplicates = 0;
-        for (int c : counts) {
-            if (c == 0) {
-                duplicates++;
-            }
-        }
-        int accepted = counts.length - duplicates;
+        int accepted = insert(s.id(), payload.readings(), now);
+        int duplicates = payload.readings().size() - accepted;
         ReadingIn last = payload.readings().get(payload.readings().size() - 1);
         if (payload.readings().size() <= 5) { // skip UI pushes during load tests
             live.publish(Topics.READINGS, Map.of("sensorId", s.id(), "equipmentId", s.equipmentId(),
@@ -146,41 +136,31 @@ public class IngestionService {
         return v != null && Double.isFinite(v) && v > -200 && v < 300;
     }
 
-    private int[] insert(long sensorId, List<ReadingIn> readings, Instant receivedAt) {
+    /**
+     * Stores the batch with one multi-row INSERT IGNORE and returns how many rows were new. A (sensor, seq) already
+     * stored is skipped by the unique key, so a replayed or retried batch is stored once. The affected-row count of one
+     * statement is exact; per-row batch counts are not (with rewriteBatchedStatements the driver reports
+     * SUCCESS_NO_INFO for every row, which used to count duplicates as accepted).
+     */
+    private int insert(long sensorId, List<ReadingIn> readings, Instant receivedAt) {
         Timestamp received = Timestamp.from(receivedAt);
-        int[] raw = jdbc.batchUpdate("""
+        StringBuilder sql = new StringBuilder("""
                 INSERT IGNORE INTO readings
                   (sensor_id, seq_no, measured_at, received_at, temperature_c, humidity_pct, surface_temp_c)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, new BatchPreparedStatementSetter() {
-            @Override
-            public void setValues(PreparedStatement ps, int i) throws SQLException {
-                ReadingIn r = readings.get(i);
-                ps.setLong(1, sensorId);
-                ps.setLong(2, r.seq());
-                ps.setTimestamp(3, Timestamp.from(r.measuredAt()));
-                ps.setTimestamp(4, received);
-                ps.setDouble(5, r.temperatureC());
-                ps.setDouble(6, r.humidityPct());
-                if (r.surfaceTempC() == null) {
-                    ps.setNull(7, Types.DECIMAL);
-                } else {
-                    ps.setDouble(7, r.surfaceTempC());
-                }
-            }
-
-            @Override
-            public int getBatchSize() {
-                return readings.size();
-            }
-        });
-        // With rewriteBatchedStatements the driver may report SUCCESS_NO_INFO; count those as accepted.
-        for (int i = 0; i < raw.length; i++) {
-            if (raw[i] == Statement.SUCCESS_NO_INFO) {
-                raw[i] = 1;
-            }
+                VALUES """);
+        List<Object> args = new ArrayList<>(readings.size() * 7);
+        for (int i = 0; i < readings.size(); i++) {
+            ReadingIn r = readings.get(i);
+            sql.append(i == 0 ? " " : ", ").append("(?, ?, ?, ?, ?, ?, ?)");
+            args.add(sensorId);
+            args.add(r.seq());
+            args.add(Timestamp.from(r.measuredAt()));
+            args.add(received);
+            args.add(r.temperatureC());
+            args.add(r.humidityPct());
+            args.add(r.surfaceTempC());
         }
-        return raw;
+        return jdbc.update(sql.toString(), args.toArray());
     }
 
     private Result reject(String deviceId, Long sensorId, Instant now, int status, String reason, String detail) {

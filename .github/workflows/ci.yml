@@ -22,3 +22,13 @@ jobs:
       # Testcontainers can start MySQL because Docker is available on GitHub's Ubuntu runners.
       - name: Build and test
         run: mvn -B verify
+
+      # JaCoCo report from `mvn verify` (backend/target/site/jacoco); totals in the log and the run summary.
+      - name: Coverage
+        run: |
+          python3 scripts/coverage-summary.py backend/target/site/jacoco/jacoco.csv | tee coverage.txt
+          { echo '### Backend coverage'; echo '```'; cat coverage.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: backend-coverage, path: backend/target/site/jacoco/, if-no-files-found: ignore }

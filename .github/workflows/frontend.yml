@@ -12,6 +12,6 @@ jobs:
         with: { node-version: "22" }
       - run: npm install --no-audit --no-fund
       - run: npm run lint
-      - run: npm test
+      - run: npm run test:coverage    # the tests, with the coverage summary in the log
       - run: npm run build
       - run: npm run build:mock    # the mock build must keep working: it is the team's demo fallback

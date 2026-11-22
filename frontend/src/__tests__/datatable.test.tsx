@@ -74,6 +74,68 @@ describe("DataTable rows per page", () => {
   });
 });
 
+interface Scored { id: number; name: string; score: number }
+const SCORED: Scored[] = Array.from({ length: 23 }, (_, i) => ({ id: i + 1, name: `item ${String(i + 1).padStart(2, "0")}`, score: (i * 7) % 23 }));
+const SCORED_COLUMNS: Column<Scored>[] = [
+  { key: "name", label: "Name", sortable: true, sortValue: (r) => r.name, render: (r) => r.name },
+  { key: "score", label: "Score", sortable: true, right: true, sortValue: (r) => r.score, render: (r) => String(r.score) },
+  { key: "note", label: "Note", render: () => "–" },
+];
+const pager = () => document.querySelector(".pager .num")!.textContent;
+
+describe("DataTable sorting, paging, selection and empty state", () => {
+  it("sorts by a column and flips the direction on a second click", () => {
+    render(<DataTable rows={SCORED} columns={SCORED_COLUMNS} initialSort={{ key: "name", dir: "asc" }} />);
+    expect(names().slice(0, 2)).toEqual(["item 01", "item 02"]);
+    const score = screen.getByRole("columnheader", { name: /Score/ });
+    fireEvent.click(score);
+    expect(score.getAttribute("aria-sort")).toBe("ascending");
+    expect(screen.getAllByRole("row")[1].textContent).toContain("0");
+    fireEvent.click(score);
+    expect(score.getAttribute("aria-sort")).toBe("descending");
+    expect(within(screen.getAllByRole("row")[1]).getAllByRole("cell")[1].textContent).toBe("22");
+    fireEvent.click(screen.getByRole("columnheader", { name: "Note" }));   // not sortable: nothing changes
+    expect(score.getAttribute("aria-sort")).toBe("descending");
+  });
+
+  it("pages with previous/next and numbers, and shows X–Y of Z", () => {
+    render(<DataTable rows={SCORED} columns={SCORED_COLUMNS} initialSort={{ key: "name", dir: "asc" }} />);
+    expect(pager()).toBe("Showing 1–10 of 23");
+    expect((screen.getByRole("button", { name: "Previous page" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }));
+    expect(pager()).toBe("Showing 11–20 of 23");
+    expect(names()[0]).toBe("item 11");
+    fireEvent.click(screen.getByRole("button", { name: "3" }));
+    expect(pager()).toBe("Showing 21–23 of 23");
+    expect((screen.getByRole("button", { name: "Next page" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole("button", { name: "3" }).getAttribute("aria-current")).toBe("page");
+  });
+
+  it("changing the page size goes back to page 1 and keeps the sort (no tableId)", () => {
+    render(<DataTable rows={SCORED} columns={SCORED_COLUMNS} initialSort={{ key: "name", dir: "desc" }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }));
+    chooseSize(5);
+    expect(pager()).toBe("Showing 1–5 of 23");
+    expect(names()).toEqual(["item 23", "item 22", "item 21", "item 20", "item 19"]);
+  });
+
+  it("selects rows and offers bulk actions", () => {
+    const bulk = vi.fn();
+    render(<DataTable rows={SCORED} columns={SCORED_COLUMNS} selectable bulk={(ids, clear) => <button onClick={() => { bulk(ids); clear(); }}>Do it</button>} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select all on page" }));
+    expect(screen.getByText("10 selected")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Do it" }));
+    expect(bulk).toHaveBeenCalledWith(SCORED.slice(0, 10).map((r) => r.id));
+    expect(screen.queryByText(/selected/)).toBeNull();
+  });
+
+  it("shows an empty state", () => {
+    render(<DataTable rows={[]} columns={SCORED_COLUMNS} emptyTitle="No alerts" emptyText="All quiet." />);
+    expect(screen.getByText("No alerts")).toBeTruthy();
+    expect(pager()).toBe("No results");
+  });
+});
+
 describe("DataTable server paging", () => {
   it("shows the server's total, asks the parent for pages and sizes, and doesn't sort one page locally", () => {
     const onPage = vi.fn(), onSize = vi.fn();
