@@ -42,7 +42,7 @@ export function Health() {
         {stat("Open issues", (ev.data ?? []).filter((x) => !x.endedAt).length, "currently active")}
         {stat("Services", <>{svc.filter((x) => x.state === "UP").length}<small>/ {svc.length}</small></>, svc.every((x) => x.state === "UP") ? "all running" : "check below")}
       </div></div>
-      <DataTable rows={rows} initialSort={{ key: "status", dir: "asc" }} pageSize={8} onRowClick={(x) => navigate(`/health?sensor=${x.sensorId}`)} isSelected={(x) => String(x.sensorId) === sel}
+      <DataTable rows={rows} initialSort={{ key: "status", dir: "asc" }} pageSize={8} tableId="sensors" onRowClick={(x) => navigate(`/health?sensor=${x.sensorId}`)} isSelected={(x) => String(x.sensorId) === sel}
         tools={<><SearchBox value={q} onChange={setQ} placeholder="Search sensors" /><Dropdown label="Status" value={st} onChange={setSt} options={[{ value: "all", label: "Any status" }, ...ORDER.map((o) => ({ value: o, label: label(o) }))]} /><span className="spacer" /><span className="small muted">Checked every 5 s</span></>}
         columns={[
           { key: "dev", label: "Sensor", sortable: true, sortValue: (x) => x.deviceId, render: (x) => <><div className="cell-main">{x.deviceId}</div><div className="cell-sub">{x.equipmentName}, {x.locationName}</div></> },

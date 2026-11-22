@@ -25,6 +25,8 @@ import java.util.Objects;
  * @param signatureFailureMin     rejected signatures in the window before SIGNATURE_FAILURES opens
  * @param clockSkewThreshold      median |received - measured| before CLOCK_SKEW opens
  * @param recoveryEvaluations     clean evaluations in a row needed to close an issue (hysteresis)
+ * @param startupGrace            after the platform starts, OFFLINE is neither opened nor closed for this long, so
+ *                                sensors that were silent only because the platform was down are not flagged
  */
 public record HealthPolicy(
         double lateFactor,
@@ -44,11 +46,16 @@ public record HealthPolicy(
         int lossyMinExpected,
         int signatureFailureMin,
         Duration clockSkewThreshold,
-        int recoveryEvaluations) {
+        int recoveryEvaluations,
+        Duration startupGrace) {
 
     public HealthPolicy {
         Objects.requireNonNull(window, "window");
         Objects.requireNonNull(clockSkewThreshold, "clockSkewThreshold");
+        Objects.requireNonNull(startupGrace, "startupGrace");
+        if (startupGrace.isNegative()) {
+            throw new IllegalArgumentException("startupGrace must not be negative");
+        }
         if (lateFactor <= 0 || offlineFactor <= lateFactor) {
             throw new IllegalArgumentException("need 0 < lateFactor < offlineFactor");
         }
@@ -69,6 +76,7 @@ public record HealthPolicy(
                 25.0, 8,
                 3,
                 Duration.ofMinutes(2),
-                3);
+                3,
+                Duration.ofMinutes(3));
     }
 }

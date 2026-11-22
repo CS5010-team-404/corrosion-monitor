@@ -29,13 +29,14 @@ public class HealthProperties {
     private int signatureFailureMin = d.signatureFailureMin();
     private Duration clockSkewThreshold = d.clockSkewThreshold();
     private int recoveryEvaluations = d.recoveryEvaluations();
+    private Duration startupGrace = d.startupGrace();
     /** A background service whose last success is older than this is reported DOWN. */
     private Duration serviceStaleAfter = Duration.ofMinutes(2);
 
     public HealthPolicy toPolicy() {
         return new HealthPolicy(lateFactor, offlineFactor, window, stuckMinReadings, stuckEpsilon, tempMinC, tempMaxC,
                 humidityMinPct, humidityMaxPct, outOfRangeMinCount, spikeTempC, spikeHumidityPct, erraticMinSpikes,
-                lossyMissingPct, lossyMinExpected, signatureFailureMin, clockSkewThreshold, recoveryEvaluations);
+                lossyMissingPct, lossyMinExpected, signatureFailureMin, clockSkewThreshold, recoveryEvaluations, startupGrace);
     }
 
     // --- getters and setters (required for binding) -------------------------------------------------
@@ -77,6 +78,8 @@ public class HealthProperties {
     public void setClockSkewThreshold(Duration v) { clockSkewThreshold = v; }
     public int getRecoveryEvaluations() { return recoveryEvaluations; }
     public void setRecoveryEvaluations(int v) { recoveryEvaluations = v; }
+    public Duration getStartupGrace() { return startupGrace; }
+    public void setStartupGrace(Duration v) { startupGrace = v; }
     public Duration getServiceStaleAfter() { return serviceStaleAfter; }
     public void setServiceStaleAfter(Duration v) { serviceStaleAfter = v; }
 }

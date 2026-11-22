@@ -35,6 +35,8 @@ public class JdbcAlertStore implements AlertStore {
     @Override
     public long open(Signal s, Instant openedAt) {
         var keys = new GeneratedKeyHolder();
+        String title = title(s);
+        String message = message(s, title);
         jdbc.update(con -> {
             var ps = con.prepareStatement("""
                 INSERT INTO alert (location_id, equipment_id, sensor_id, device_id, source, type, severity, title, message,
@@ -42,7 +44,7 @@ public class JdbcAlertStore implements AlertStore {
                 VALUES ((SELECT location_id FROM equipment WHERE id = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?)
                 """, Statement.RETURN_GENERATED_KEYS);
             Object[] args = {s.equipmentId(), s.equipmentId(), s.sensorId(), s.deviceId(), s.source(), s.type(),
-                    severity(s), title(s), message(s), s.dedupKey(), Timestamp.from(openedAt),
+                    severity(s), title, message, s.dedupKey(), Timestamp.from(openedAt),
                     isCritical(s) ? Timestamp.from(openedAt) : null};
             for (int i = 0; i < args.length; i++) {
                 ps.setObject(i + 1, args[i]);
@@ -55,12 +57,13 @@ public class JdbcAlertStore implements AlertStore {
     @Override
     public void refresh(long alertId, Signal s, Instant at) {
         // critical_since is set before severity changes, so it still sees the old severity.
+        String title = title(s);
         jdbc.update("""
                 UPDATE alert SET
                     critical_since = CASE WHEN ? THEN (CASE WHEN severity = 'CRITICAL' THEN COALESCE(critical_since, opened_at) ELSE ? END) END,
                     severity = ?, title = ?, message = ?, sensor_id = ?, condition_cleared_at = NULL
                 WHERE id = ?
-                """, isCritical(s), Timestamp.from(at), severity(s), title(s), message(s), s.sensorId(), alertId);
+                """, isCritical(s), Timestamp.from(at), severity(s), title, message(s, title), s.sensorId(), alertId);
     }
 
     @Override
@@ -90,13 +93,23 @@ public class JdbcAlertStore implements AlertStore {
         return "CRITICAL".equals(s.severity());
     }
 
-    private static String title(Signal s) {
-        return truncate(s.title() != null ? s.title() : s.type(), TITLE_MAX);
+    /** Analytics condensation alerts are titled with the equipment's name and location (AlertTitles). */
+    private String title(Signal s) {
+        if (!AlertTitles.namesEquipment(s) || s.equipmentId() == null) {
+            return truncate(AlertTitles.of(s, null, null), TITLE_MAX);
+        }
+        var names = jdbc.query("""
+                SELECT e.name AS equipment_name, l.name AS location_name
+                FROM equipment e LEFT JOIN location l ON l.id = e.location_id WHERE e.id = ?
+                """, (rs, row) -> new String[] {rs.getString("equipment_name"), rs.getString("location_name")},
+                s.equipmentId());
+        String[] found = names.isEmpty() ? new String[2] : names.get(0);
+        return truncate(AlertTitles.of(s, found[0], found[1]), TITLE_MAX);
     }
 
     /** alert.message is NOT NULL. */
-    private static String message(Signal s) {
-        return truncate(s.message() != null ? s.message() : title(s), MESSAGE_MAX);
+    private static String message(Signal s, String title) {
+        return truncate(s.message() != null ? s.message() : title, MESSAGE_MAX);
     }
 
     private static String truncate(String text, int max) {

@@ -12,9 +12,10 @@ import java.util.Objects;
  * @param lastSeenAt         received time of the newest accepted reading ever, or null if never seen
  * @param signatureFailures  rejected-signature requests for this device within the window
  * @param now                evaluation time
+ * @param serviceStartedAt   when the platform (re)started, for {@link HealthPolicy#startupGrace()}; null = no grace
  */
 public record Observation(SensorRef sensor, List<ReadingSample> window, Instant lastSeenAt, int signatureFailures,
-                          Instant now) {
+                          Instant now, Instant serviceStartedAt) {
 
     public Observation {
         Objects.requireNonNull(sensor, "sensor");
@@ -22,5 +23,11 @@ public record Observation(SensorRef sensor, List<ReadingSample> window, Instant 
         window = window == null ? List.of()
                 : window.stream().sorted(Comparator.comparing(ReadingSample::receivedAt)
                         .thenComparingLong(ReadingSample::seqNo)).toList();
+    }
+
+    /** An observation without a known service start, so no startup grace applies. */
+    public Observation(SensorRef sensor, List<ReadingSample> window, Instant lastSeenAt, int signatureFailures,
+                       Instant now) {
+        this(sensor, window, lastSeenAt, signatureFailures, now, null);
     }
 }

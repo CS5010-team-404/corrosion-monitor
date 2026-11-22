@@ -7,6 +7,8 @@
   <artifactId>ecp-platform-app</artifactId>
   <description>Runnable data platform service: ingestion + sensor health + simulator + forecast API</description>
   <dependencies>
+    <!-- Used directly (signals, audit, live updates); declared so the aggregated coverage report includes it. -->
+    <dependency><groupId>edu.neu.ecp</groupId><artifactId>ecp-common</artifactId></dependency>
     <dependency><groupId>edu.neu.ecp</groupId><artifactId>ecp-ingestion</artifactId></dependency>
     <dependency><groupId>edu.neu.ecp</groupId><artifactId>ecp-health</artifactId></dependency>
     <dependency><groupId>edu.neu.ecp</groupId><artifactId>ecp-simulator</artifactId></dependency>
@@ -20,9 +22,24 @@
     <dependency><groupId>org.flywaydb</groupId><artifactId>flyway-mysql</artifactId></dependency>
     <dependency><groupId>com.mysql</groupId><artifactId>mysql-connector-j</artifactId><scope>runtime</scope></dependency>
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
+    <!-- Integration tests: MySQL 8.4 with the production settings (versions from the Spring Boot BOM). -->
+    <dependency><groupId>org.testcontainers</groupId><artifactId>mysql</artifactId><scope>test</scope></dependency>
+    <dependency><groupId>org.testcontainers</groupId><artifactId>junit-jupiter</artifactId><scope>test</scope></dependency>
   </dependencies>
   <build>
     <finalName>ecp-platform</finalName>
-    <plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins>
+    <plugins>
+      <plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId></plugin>
+      <!-- One coverage report for the whole platform: this module depends on every other one, so report-aggregate
+           here covers all of them, including code exercised by tests in another module. target/site/jacoco-aggregate. -->
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <executions>
+          <execution><id>report-aggregate</id><phase>verify</phase><goals><goal>report-aggregate</goal></goals>
+            <configuration><includeCurrentProject>true</includeCurrentProject></configuration></execution>
+        </executions>
+      </plugin>
+    </plugins>
   </build>
 </project>
