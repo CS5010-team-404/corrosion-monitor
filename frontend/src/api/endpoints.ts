@@ -1,4 +1,4 @@
-import { api, patch, post, type Pending } from "../lib/api";
+import { api, patch, post, put, type Pending } from "../lib/api";
 import type * as T from "./types";
 import { DAY } from "../lib/format";
 
@@ -78,6 +78,8 @@ export const reportFile = (kind: "csv" | "pdf", from: number | null, to: number 
 
 // configuration (profiles: Anela)
 export const profiles = () => api<T.Profile[]>("/api/v1/profiles");
+/** Admins only. The backend validates (ProfileValidator) and answers 400 with the problems as readable sentences. */
+export const updateProfile = (id: number, p: Omit<T.Profile, "id">) => put<T.Profile>(`/api/v1/profiles/${id}`, p);
 
 // users (admin only; team backend)
 export const users = () => api<T.User[]>("/api/v1/admin/users");

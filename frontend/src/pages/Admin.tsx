@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { devices, equipmentStatus, profiles, registerDevice, scenarios, setScenario, setSensorInterval, setUserRole, simulator, unlockUser, users } from "../api/endpoints";
+import { devices, equipmentStatus, profiles, registerDevice, scenarios, setScenario, setSensorInterval, setUserRole, simulator, unlockUser, updateProfile, users } from "../api/endpoints";
 import type * as T from "../api/types";
 import { Dropdown } from "../components/Dropdown";
 import { Icon } from "../components/Icon";
@@ -140,17 +140,94 @@ export function IntervalDialog({ device, onClose, onSaved }: { device: T.Device;
   );
 }
 
-function ProfilesTab() {
+export function ProfilesTab() {
   const p = useAsync(profiles, []);
+  const { can } = useAuth();
+  const [editing, setEditing] = useState<T.Profile | null>(null);
+  const admin = can("ADMIN");
   if (p.loading) return <PageSkeleton table />;
   if (p.error) return <ErrorState error={p.error} onRetry={p.reload} />;
+  if (!p.data?.length) return <div className="card"><Empty icon="sliders" title="No equipment profiles" text="Profiles come from the team backend's equipment_profile table." /></div>;
   return (
     <>
-      <div className="card flush"><div className="table-wrap"><table className="dt"><thead><tr><th>Profile</th><th className="r">RH warning</th><th className="r">RH critical</th><th className="r">Margin warning</th><th className="r">Margin critical</th><th className="r">Temperature</th></tr></thead><tbody>
-        {(p.data ?? []).map((x) => <tr key={x.id}><td className="cell-main">{x.name}</td><td className="r num">{x.rhWarningPct}%</td><td className="r num">{x.rhCriticalPct}%</td><td className="r num">{x.marginWarningC} °C</td><td className="r num">{x.marginCriticalC} °C</td><td className="r num">{x.tempMinC} to {x.tempMaxC} °C</td></tr>)}
+      <div className="card flush"><div className="table-wrap"><table className="dt"><thead><tr><th>Profile</th><th className="r">RH warning</th><th className="r">RH critical</th><th className="r">Margin warning</th><th className="r">Margin critical</th><th className="r">Temperature</th><th className="r">Surface offset</th>{admin && <th className="r"><span className="sr">Actions</span></th>}</tr></thead><tbody>
+        {p.data.map((x) => <tr key={x.id}><td className="cell-main">{x.name}</td><td className="r num">{x.rhWarningPct}%</td><td className="r num">{x.rhCriticalPct}%</td><td className="r num">{x.marginWarningC} °C</td><td className="r num">{x.marginCriticalC} °C</td><td className="r num">{x.tempMinC} to {x.tempMaxC} °C</td><td className="r num">{x.surfaceOffsetC} °C</td>
+          {admin && <td className="r"><Button size="sm" variant="ghost" aria-label={`Edit ${x.name}`} onClick={() => setEditing(x)}>Edit</Button></td>}</tr>)}
       </tbody></table></div></div>
       <p className="small muted" style={{ marginTop: 14 }}>IT equipment limits follow ASHRAE TC 9.9 (5th edition, 2021): RH up to 70% with low pollutants, 50% where corrosive gases are present.</p>
+      {editing && <ProfileDialog profile={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); p.reload(); }} />}
     </>
+  );
+}
+
+type ProfileValues = Omit<T.Profile, "id">;
+const PROFILE_FIELDS: { key: keyof ProfileValues; label: string; unit: string }[] = [
+  { key: "rhWarningPct", label: "RH warning", unit: "%" },
+  { key: "rhCriticalPct", label: "RH critical", unit: "%" },
+  { key: "marginWarningC", label: "Margin warning", unit: "°C" },
+  { key: "marginCriticalC", label: "Margin critical", unit: "°C" },
+  { key: "tempMinC", label: "Minimum temperature", unit: "°C" },
+  { key: "tempMaxC", label: "Maximum temperature", unit: "°C" },
+  { key: "surfaceOffsetC", label: "Surface offset", unit: "°C" },
+];
+
+/**
+ * Administration > Equipment profiles: edit one profile (PUT /api/v1/profiles/{id}, admins only). The rules live in
+ * the backend (ProfileValidator); its 400 message is shown as it is. A confirmation step lists what will change.
+ */
+export function ProfileDialog({ profile, onClose, onSaved }: { profile: T.Profile; onClose: () => void; onSaved: (p: T.Profile) => void }) {
+  const toast = useToast();
+  const [values, setValues] = useState<Record<string, string>>(() =>
+    Object.fromEntries([["name", profile.name], ...PROFILE_FIELDS.map((f) => [f.key, String(profile[f.key])])]));
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const blank = PROFILE_FIELDS.filter((f) => values[f.key].trim() === "" || !Number.isFinite(Number(values[f.key])));
+  const changes = [
+    ...(values.name.trim() !== profile.name ? [{ label: "Name", from: profile.name, to: values.name.trim() }] : []),
+    ...PROFILE_FIELDS.filter((f) => !blank.includes(f) && Number(values[f.key]) !== profile[f.key])
+      .map((f) => ({ label: f.label, from: `${profile[f.key]} ${f.unit}`, to: `${Number(values[f.key])} ${f.unit}` })),
+  ];
+  const body = (): ProfileValues => ({
+    name: values.name.trim(),
+    ...Object.fromEntries(PROFILE_FIELDS.map((f) => [f.key, Number(values[f.key])])),
+  } as ProfileValues);
+  const set = (k: string, v: string) => { setValues((old) => ({ ...old, [k]: v })); setServerError(null); };
+  const save = async () => {
+    setBusy(true);
+    try {
+      const saved = await updateProfile(profile.id, body());
+      toast(`${saved.name} saved`);
+      onSaved(saved);
+    } catch (err) {
+      setServerError(errorMessage(err));
+      setConfirming(false);
+    } finally { setBusy(false); }
+  };
+  const footer = confirming
+    ? <><Button variant="ghost" disabled={busy} onClick={() => setConfirming(false)}>Back</Button><Button variant="primary" busy={busy} onClick={save}>Save profile</Button></>
+    : <><Button variant="ghost" onClick={onClose}>Cancel</Button><Button variant="primary" disabled={blank.length > 0 || changes.length === 0} onClick={() => setConfirming(true)}>Review changes</Button></>;
+  return (
+    <Modal title={`Edit profile: ${profile.name}`} sub="Thresholds that decide when equipment using this profile shows a warning or a critical risk." onClose={() => !busy && onClose()} footer={footer}>
+      {serverError && <div className="callout crit" role="alert"><Icon name="alert" /><div><b>The server did not accept these values.</b> {serverError}</div></div>}
+      {confirming ? <>
+        <p className="small muted" style={{ margin: 0 }}>Save these changes? They apply to every equipment item with this profile, and the change is recorded in the audit log.</p>
+        <table className="dt"><thead><tr><th>Field</th><th>Now</th><th>New</th></tr></thead><tbody>
+          {changes.map((c) => <tr key={c.label}><td>{c.label}</td><td className="num">{c.from}</td><td className="num cell-main">{c.to}</td></tr>)}
+        </tbody></table>
+      </> : <>
+        <label className="field">Name<input value={values.name} onChange={(e) => set("name", e.target.value)} maxLength={100} /></label>
+        <div className="cols">
+          {PROFILE_FIELDS.map((f) => (
+            <label key={f.key} className="field">{f.label} ({f.unit})
+              <input type="number" inputMode="decimal" step="0.1" value={values[f.key]} aria-invalid={blank.includes(f)} onChange={(e) => set(f.key, e.target.value)} />
+              {blank.includes(f) && <span className="field-error" role="alert">Enter a number.</span>}
+            </label>
+          ))}
+        </div>
+        <span className="field-hint">The server checks the rules: warning margin above the critical margin, critical margin above 0 °C, warning humidity below critical humidity (at most 100 %), minimum temperature below maximum.</span>
+      </>}
+    </Modal>
   );
 }
 
