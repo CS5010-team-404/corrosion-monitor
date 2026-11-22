@@ -18,14 +18,16 @@ public final class HttpReadingSender implements ReadingSender {
 
     @Override
     public int send(SimulatedSensor.SignedRequest r) throws IOException, InterruptedException {
-        HttpRequest request = HttpRequest.newBuilder(endpoint)
+        HttpRequest.Builder request = HttpRequest.newBuilder(endpoint)
                 .timeout(Duration.ofSeconds(10))
                 .header("Content-Type", "application/json")
                 .header("X-Device-Id", r.deviceId())
                 .header("X-Timestamp", Long.toString(r.epochSeconds()))
-                .header("X-Signature", r.signature())
-                .POST(HttpRequest.BodyPublishers.ofString(r.body()))
-                .build();
-        return client.send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
+                .header("X-Signature", r.signature());
+        if (r.nonce() != null) {
+            request.header("X-Nonce", r.nonce());
+        }
+        return client.send(request.POST(HttpRequest.BodyPublishers.ofString(r.body())).build(),
+                HttpResponse.BodyHandlers.discarding()).statusCode();
     }
 }

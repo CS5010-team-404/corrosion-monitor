@@ -87,10 +87,12 @@ class SimulatedSensorTest {
         SimulatedSensor s = sensor();
         SimulatedReading r = s.next(T0).orElseThrow();
         var good = s.sign(List.of(r), 1000L);
-        assertTrue(Hmac.verifyRequest("secret", 1000L, good.body(), good.signature()));
+        assertTrue(Hmac.verifyRequest("secret", 1000L, good.nonce(), good.body(), good.signature()));
+        assertTrue(good.nonce().matches("[0-9a-f]{32}"), "every request carries a fresh nonce");
+        assertFalse(good.nonce().equals(s.sign(List.of(r), 1000L).nonce()));
         s.setScenario(Scenario.BAD_SIGNATURE, T0);
         var bad = s.sign(List.of(r), 1000L);
-        assertFalse(Hmac.verifyRequest("secret", 1000L, bad.body(), bad.signature()));
+        assertFalse(Hmac.verifyRequest("secret", 1000L, bad.nonce(), bad.body(), bad.signature()));
     }
 
     @Test

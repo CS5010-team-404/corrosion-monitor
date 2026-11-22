@@ -2,6 +2,7 @@ package edu.neu.ecp.ingestion;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.startsWith;
@@ -44,13 +45,17 @@ class IngestionServiceTest {
     private JdbcTemplate jdbc;
     private LiveUpdates live;
     private IngestionService service;
+    private ReplayGuard replays;
 
     @BeforeEach
     void setUp() {
         registry = mock(SensorRegistry.class);
         jdbc = mock(JdbcTemplate.class);
         live = mock(LiveUpdates.class);
-        service = new IngestionService(registry, jdbc, json, live, Clock.fixed(NOW, ZoneOffset.UTC), Duration.ofMinutes(5));
+        replays = mock(ReplayGuard.class);
+        when(replays.claim(anyLong(), anyString(), any(), any())).thenReturn(true);
+        service = new IngestionService(registry, jdbc, json, live, Clock.fixed(NOW, ZoneOffset.UTC), Duration.ofMinutes(5),
+                replays);
         when(registry.find("SIM-001")).thenReturn(Optional.of(new SensorRegistry.RegisteredSensor(7, "SIM-001", 3, true, SECRET)));
         when(registry.find("OFF-001")).thenReturn(Optional.of(new SensorRegistry.RegisteredSensor(8, "OFF-001", 3, false, SECRET)));
         when(registry.find("NOPE")).thenReturn(Optional.empty());
@@ -168,6 +173,66 @@ class IngestionServiceTest {
         assertThat(IngestionService.validate(payload(new IngestionService.ReadingIn(1L, NOW, 22.0, 50.0, 400.0)), NOW)).contains("surfaceTempC");
         // Physically impossible but plausible numbers are kept, so sensor health can flag a failing sensor.
         assertThat(IngestionService.validate(payload(new IngestionService.ReadingIn(1L, NOW, 22.0, 104.0, null)), NOW)).isNull();
+    }
+
+    // ---------------------------------------------------------------- replay protection
+
+    private static final String NONCE = "0123456789abcdef0123456789abcdef";
+
+    @Test
+    void acceptsARequestSignedWithANonceAndRemembersTheNonceUntilTheWindowCloses() {
+        when(jdbc.update(startsWith("INSERT IGNORE"), any(Object[].class))).thenReturn(2);
+        String sig = Hmac.signRequest(SECRET, NOW.getEpochSecond(), NONCE, BODY);
+        var r = service.ingest("SIM-001", ts(NOW), sig, NONCE, BODY);
+        assertThat(r.httpStatus()).isEqualTo(202);
+        // remembered for the 5-minute timestamp window plus a 1-minute margin, keyed by the nonce, not the signature
+        verify(replays).claim(7L, ReplayGuard.key(NONCE, sig), NOW.plusSeconds(360), NOW);
+        assertThat(ReplayGuard.key(NONCE, sig)).isNotEqualTo(ReplayGuard.key(null, sig));
+    }
+
+    @Test
+    void theNonceIsPartOfTheSignature() {
+        String legacySig = sign(BODY, NOW); // signed without the nonce, then a nonce added on the way
+        var r = service.ingest("SIM-001", ts(NOW), legacySig, NONCE, BODY);
+        assertThat(r.httpStatus()).isEqualTo(401);
+        assertThat(r.outcome()).isEqualTo("BAD_SIGNATURE");
+        var swapped = service.ingest("SIM-001", ts(NOW), Hmac.signRequest(SECRET, NOW.getEpochSecond(), NONCE, BODY),
+                "ffffffffffffffffffffffffffffffff", BODY);
+        assertThat(swapped.outcome()).isEqualTo("BAD_SIGNATURE");
+    }
+
+    @Test
+    void aMalformedNonceIs400() {
+        var r = service.ingest("SIM-001", ts(NOW), "x", "short", BODY);
+        assertThat(r.httpStatus()).isEqualTo(400);
+        assertThat(r.detail()).contains("X-Nonce");
+        assertRecorded("SIM-001", 7L, "INVALID_PAYLOAD");
+    }
+
+    @Test
+    void aReplayIs409AndLoggedAndStoresNothing() {
+        when(replays.claim(anyLong(), anyString(), any(), any())).thenReturn(false);
+        var r = service.ingest("SIM-001", ts(NOW), sign(BODY, NOW), BODY);
+        assertThat(r.httpStatus()).isEqualTo(409);
+        assertThat(r.outcome()).isEqualTo("REPLAYED_REQUEST");
+        assertRecorded("SIM-001", 7L, "REPLAYED_REQUEST");
+        verify(jdbc, never()).update(startsWith("INSERT IGNORE"), any(Object[].class));
+        verify(live, never()).publish(any(), any());
+    }
+
+    @Test
+    void legacyRequestsAreKeyedByTheirSignature() {
+        when(jdbc.update(startsWith("INSERT IGNORE"), any(Object[].class))).thenReturn(2);
+        String sig = sign(BODY, NOW);
+        service.ingest("SIM-001", ts(NOW), sig.toUpperCase(), BODY);
+        verify(replays).claim(7L, ReplayGuard.key(null, sig), NOW.plusSeconds(360), NOW);
+    }
+
+    @Test
+    void rejectedRequestsNeverClaimAKey() {
+        service.ingest("SIM-001", ts(NOW), "00".repeat(32), BODY);
+        service.ingest("SIM-001", ts(NOW.minusSeconds(3600)), sign(BODY, NOW.minusSeconds(3600)), BODY);
+        verify(replays, never()).claim(anyLong(), anyString(), any(), any());
     }
 
     private static IngestionService.Payload payload(IngestionService.ReadingIn r) {

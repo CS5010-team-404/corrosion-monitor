@@ -2,7 +2,8 @@
 """Corrosion Watch device client for a Raspberry Pi with an SHT31 sensor (I2C address 0x44).
 
 Reads temperature and humidity every INTERVAL seconds, signs each batch exactly like the simulator
-(HMAC-SHA256 over "<unix seconds>.<raw body>", lowercase hex) and posts it to the ingestion API.
+(HMAC-SHA256 over "<unix seconds>.<nonce>.<raw body>", lowercase hex, with a fresh random X-Nonce per request, so a
+captured request cannot be replayed) and posts it to the ingestion API.
 Readings that cannot be sent are kept in a local queue and sent later in order, up to 500 per batch.
 
     pip install smbus2
@@ -17,6 +18,7 @@ import hashlib
 import hmac
 import json
 import os
+import secrets
 import time
 import urllib.error
 import urllib.request
@@ -32,8 +34,9 @@ STATE.mkdir(parents=True, exist_ok=True)
 SEQ_FILE, QUEUE_FILE = STATE / "seq", STATE / "queue.jsonl"
 
 
-def sign(secret: str, epoch_seconds: int, body: str) -> str:
-    return hmac.new(secret.encode(), f"{epoch_seconds}.{body}".encode(), hashlib.sha256).hexdigest()
+def sign(secret: str, epoch_seconds: int, nonce: str, body: str) -> str:
+    """Signing v2. Without a nonce (legacy, still accepted) the message is f"{epoch_seconds}.{body}"."""
+    return hmac.new(secret.encode(), f"{epoch_seconds}.{nonce}.{body}".encode(), hashlib.sha256).hexdigest()
 
 
 def crc8(data: bytes) -> int:
@@ -69,8 +72,10 @@ def next_seq() -> int:
 def send(readings) -> bool:
     body = json.dumps({"readings": readings}, separators=(",", ":"))
     ts = int(time.time())
+    nonce = secrets.token_hex(16)  # new for every attempt, so a retry is never mistaken for a replay
     req = urllib.request.Request(URL, data=body.encode(), method="POST", headers={
-        "Content-Type": "application/json", "X-Device-Id": DEVICE, "X-Timestamp": str(ts), "X-Signature": sign(SECRET, ts, body)})
+        "Content-Type": "application/json", "X-Device-Id": DEVICE, "X-Timestamp": str(ts), "X-Nonce": nonce,
+        "X-Signature": sign(SECRET, ts, nonce, body)})
     try:
         with urllib.request.urlopen(req, timeout=10) as r:
             return 200 <= r.status < 300
@@ -78,7 +83,8 @@ def send(readings) -> bool:
         print(f"server said {e.code}: {e.read()[:200]!r}")
         # 400 = the batch itself is invalid: drop it so it cannot block the queue forever.
         # 401/403 = wrong key, clock or deactivated device: keep the readings and fix the configuration.
-        return e.code == 400
+        # 409 = this exact request was already accepted (a replay): the readings are stored, move on.
+        return e.code in (400, 409)
     except OSError as e:
         print(f"network error: {e}")
         return False

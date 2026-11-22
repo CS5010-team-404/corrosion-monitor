@@ -18,7 +18,12 @@ import org.springframework.stereotype.Service;
 
 /**
  * Verifies, validates and stores device readings. Order of checks: known device, active, fresh timestamp,
- * valid signature, valid payload. Every rejection is recorded for the sensor health service.
+ * well-formed nonce, valid signature, valid payload, not a replay. Every rejection is recorded in ingest_rejections.
+ *
+ * <p>Replays: a signed request is accepted once. Its nonce (or, for devices that send none, its signature) is
+ * remembered until its timestamp leaves the window ({@link ReplayGuard}); the same request again gets 409
+ * REPLAYED_REQUEST. A device that retries after a timeout should sign again (new timestamp and nonce); readings it
+ * already delivered are still stored once, by (sensor, seq).
  *
  * <p>Impossible values (RH 104 %) are stored on purpose: rejecting them would hide a failing sensor.
  */
@@ -27,6 +32,9 @@ public class IngestionService {
 
     public static final int MAX_BATCH = 500;
     private static final Duration MAX_FUTURE = Duration.ofMinutes(5);
+    /** Kept a little longer than the timestamp window, so no replayable request is ever forgotten. */
+    static final Duration GUARD_MARGIN = Duration.ofMinutes(1);
+    private static final java.util.regex.Pattern NONCE = java.util.regex.Pattern.compile("[A-Za-z0-9_-]{16,64}");
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record ReadingIn(Long seq, Instant measuredAt, Double temperatureC, Double humidityPct, Double surfaceTempC) {
@@ -48,18 +56,26 @@ public class IngestionService {
     private final LiveUpdates live;
     private final Clock clock;
     private final long maxClockSkewSeconds;
+    private final ReplayGuard replays;
 
     public IngestionService(SensorRegistry registry, JdbcTemplate jdbc, ObjectMapper json, LiveUpdates live, Clock clock,
-                            @Value("${ecp.ingestion.max-clock-skew:PT5M}") Duration maxClockSkew) {
+                            @Value("${ecp.ingestion.max-clock-skew:PT5M}") Duration maxClockSkew, ReplayGuard replays) {
         this.registry = registry;
         this.jdbc = jdbc;
         this.json = json;
         this.live = live;
         this.clock = clock;
         this.maxClockSkewSeconds = maxClockSkew.toSeconds();
+        this.replays = replays;
     }
 
+    /** A legacy request without a nonce. */
     public Result ingest(String deviceId, String timestampHeader, String signature, String body) {
+        return ingest(deviceId, timestampHeader, signature, null, body);
+    }
+
+    /** @param nonce the X-Nonce header, or null for a legacy device */
+    public Result ingest(String deviceId, String timestampHeader, String signature, String nonce, String body) {
         Instant now = clock.instant();
         var sensor = registry.find(deviceId);
         if (sensor.isEmpty()) {
@@ -78,7 +94,10 @@ public class IngestionService {
         if (Math.abs(now.getEpochSecond() - ts) > maxClockSkewSeconds) {
             return reject(deviceId, s.id(), now, 401, "STALE_TIMESTAMP", "X-Timestamp outside allowed window");
         }
-        if (!Hmac.verifyRequest(s.secret(), ts, body, signature)) {
+        if (nonce != null && !NONCE.matcher(nonce).matches()) {
+            return reject(deviceId, s.id(), now, 400, "INVALID_PAYLOAD", "X-Nonce must be 16-64 of A-Z a-z 0-9 _ -");
+        }
+        if (!Hmac.verifyRequest(s.secret(), ts, nonce, body, signature)) {
             return reject(deviceId, s.id(), now, 401, "BAD_SIGNATURE", "signature does not match");
         }
 
@@ -93,6 +112,11 @@ public class IngestionService {
             return reject(deviceId, s.id(), now, 400, "INVALID_PAYLOAD", problem);
         }
 
+        Instant expires = Instant.ofEpochSecond(ts).plusSeconds(maxClockSkewSeconds).plus(GUARD_MARGIN);
+        if (!replays.claim(s.id(), ReplayGuard.key(nonce, signature), expires, now)) {
+            return reject(deviceId, s.id(), now, 409, "REPLAYED_REQUEST",
+                    nonce != null ? "nonce already used" : "identical signed request already accepted");
+        }
         int accepted = insert(s.id(), payload.readings(), now);
         int duplicates = payload.readings().size() - accepted;
         ReadingIn last = payload.readings().get(payload.readings().size() - 1);

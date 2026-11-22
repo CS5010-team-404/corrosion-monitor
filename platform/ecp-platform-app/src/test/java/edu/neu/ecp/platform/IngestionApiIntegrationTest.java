@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import edu.neu.ecp.common.domain.Hmac;
+import edu.neu.ecp.ingestion.ReplayGuard;
 import edu.neu.ecp.ingestion.SensorRegistry;
 import java.time.Duration;
 import java.time.Instant;
@@ -24,6 +25,9 @@ class IngestionApiIntegrationTest extends ApiTestSupport {
 
     @Autowired
     SensorRegistry registry;
+
+    @Autowired
+    ReplayGuard replays;
 
     private Device device;
     private Instant now;
@@ -58,19 +62,60 @@ class IngestionApiIntegrationTest extends ApiTestSupport {
     }
 
     @Test
-    void replayedOrOverlappingBatchesAreStoredOnce() throws Exception {
+    void anIdenticalRequestIsRefusedAsAReplayAndOverlappingRetriesAreStoredOnce() throws Exception {
         String body = batch(reading(1, now.minusSeconds(30), 22.4, 48.2), reading(2, now.minusSeconds(15), 22.5, 48.0));
         ingest(device.deviceId(), device.secret(), body, now).andExpect(status().isAccepted());
-        // The identical request again (a replay inside the 5-minute window): accepted, but nothing is stored twice.
+        // The identical signed request again (a replay inside the 5-minute window): refused and logged.
         ingest(device.deviceId(), device.secret(), body, now)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.outcome").value("REPLAYED_REQUEST"));
+        assertThat(lastRejection(device.deviceId())).containsEntry("reason", "REPLAYED_REQUEST")
+                .containsEntry("sensor_id", device.id()).containsEntry("detail", "identical signed request already accepted");
+        // A retry signed again a second later that overlaps: accepted, and only the new sequence number is stored.
+        ingest(device.deviceId(), device.secret(), batch(reading(2, now.minusSeconds(15), 22.5, 48.0), reading(3, now, 22.6, 47.9)),
+                now.plusSeconds(1))
                 .andExpect(status().isAccepted())
-                .andExpect(jsonPath("$.accepted").value(0))
-                .andExpect(jsonPath("$.duplicates").value(2));
-        // A retry that overlaps: only the new sequence number is stored.
-        ingest(device.deviceId(), device.secret(), batch(reading(2, now.minusSeconds(15), 22.5, 48.0), reading(3, now, 22.6, 47.9)), now)
                 .andExpect(jsonPath("$.accepted").value(1))
                 .andExpect(jsonPath("$.duplicates").value(1));
         assertThat(stored()).isEqualTo(3);
+    }
+
+    private org.springframework.test.web.servlet.ResultActions ingestWithNonce(String body, Instant signedAt, String nonce)
+            throws Exception {
+        long ts = signedAt.getEpochSecond();
+        return mvc.perform(post("/api/v1/ingest/readings").header("X-Device-Id", device.deviceId())
+                .header("X-Timestamp", String.valueOf(ts)).header("X-Nonce", nonce)
+                .header("X-Signature", Hmac.signRequest(device.secret(), ts, nonce, body))
+                .contentType(MediaType.APPLICATION_JSON).content(body));
+    }
+
+    @Test
+    void aNonceIsAcceptedOnceEvenWithANewBodyAndTimestamp() throws Exception {
+        String nonce = Hmac.newNonce();
+        ingestWithNonce(batch(reading(1, now, 22.4, 48.2)), now, nonce).andExpect(status().isAccepted());
+        // same nonce, correctly signed, different body and timestamp: still a replay of the nonce
+        ingestWithNonce(batch(reading(2, now, 22.5, 48.2)), now.plusSeconds(2), nonce)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.outcome").value("REPLAYED_REQUEST"));
+        assertThat(lastRejection(device.deviceId())).containsEntry("detail", "nonce already used");
+        // a fresh nonce for the same body is fine
+        ingestWithNonce(batch(reading(2, now, 22.5, 48.2)), now.plusSeconds(2), Hmac.newNonce()).andExpect(status().isAccepted());
+        assertThat(stored()).isEqualTo(2);
+    }
+
+    @Test
+    void replayGuardKeysExpireAndArePruned() {
+        jdbc.update("INSERT INTO ingest_replay_guard (sensor_id, request_key, expires_at) VALUES (?, ?, ?)",
+                device.id(), "e".repeat(64), java.sql.Timestamp.from(now.minus(Duration.ofMinutes(1))));
+        jdbc.update("INSERT INTO ingest_replay_guard (sensor_id, request_key, expires_at) VALUES (?, ?, ?)",
+                device.id(), "f".repeat(64), java.sql.Timestamp.from(now.plus(Duration.ofMinutes(5))));
+        // an expired key that has not been pruned yet is taken over, a live one is not
+        assertThat(replays.claim(device.id(), "e".repeat(64), now.plus(Duration.ofMinutes(6)), now)).isTrue();
+        assertThat(replays.claim(device.id(), "f".repeat(64), now.plus(Duration.ofMinutes(6)), now)).isFalse();
+        jdbc.update("UPDATE ingest_replay_guard SET expires_at = ? WHERE sensor_id = ?",
+                java.sql.Timestamp.from(now.minus(Duration.ofDays(1))), device.id());
+        assertThat(replays.prune()).isGreaterThanOrEqualTo(2);
+        assertThat(count("SELECT COUNT(*) FROM ingest_replay_guard WHERE sensor_id = ?", device.id())).isZero();
     }
 
     @Test

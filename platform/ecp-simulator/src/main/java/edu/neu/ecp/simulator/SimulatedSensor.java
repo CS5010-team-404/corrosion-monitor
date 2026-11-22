@@ -124,14 +124,19 @@ public final class SimulatedSensor {
         return Optional.of(last);
     }
 
-    /** Body and signature for a request carrying {@code readings}, signed at {@code epochSeconds}. */
+    /**
+     * Body and signature for a request carrying {@code readings}, signed at {@code epochSeconds} with a fresh nonce
+     * (signing v2, see Hmac), so the ingestion API can refuse a replay of it.
+     */
     public synchronized SignedRequest sign(List<SimulatedReading> readings, long epochSeconds) {
         String body = SimulatedReading.body(readings);
         String key = scenario == Scenario.BAD_SIGNATURE ? secret + "-wrong" : secret;
-        return new SignedRequest(deviceId, epochSeconds, body, Hmac.signRequest(key, epochSeconds, body));
+        String nonce = Hmac.newNonce();
+        return new SignedRequest(deviceId, epochSeconds, nonce, body, Hmac.signRequest(key, epochSeconds, nonce, body));
     }
 
-    public record SignedRequest(String deviceId, long epochSeconds, String body, String signature) {
+    /** @param nonce sent as X-Nonce; null for a legacy request signed without one */
+    public record SignedRequest(String deviceId, long epochSeconds, String nonce, String body, String signature) {
     }
 
     // ------------------------------------------------------------------ physics
