@@ -375,7 +375,6 @@ These are known limitations on `dev` at the time of writing, to address in QA. O
 - **Forecasts in equipment status:** the 15/30/60-minute margins and `predictedCondensationAt` are still empty. The platform publishes them every minute in `sensor_forecasts`; analytics doesn't read them yet.
 - **Condensation alerts:** analytics doesn't raise `ANALYTICS:CONDENSATION_RISK` or `CONDENSATION_FORECAST` signals yet, so only sensor-health problems become alerts. `/topic/risk` isn't published.
 - **In review, not yet on `dev`:** reports and CSV/PDF export (FR7, PR [#20](https://github.com/CS5010-team-404/corrosion-monitor/pull/20)), user administration (PR [#22](https://github.com/CS5010-team-404/corrosion-monitor/pull/22)), equipment-profile API and audit paging (PR [#21](https://github.com/CS5010-team-404/corrosion-monitor/pull/21)), and coverage reporting (PR [#19](https://github.com/CS5010-team-404/corrosion-monitor/pull/19)).
-- **Profile editing in the UI:** the API is in PR #21, but Administration › Equipment profiles only lists profiles; there is no edit form yet.
 - **Demo thresholds:** most profile thresholds and risk budgets in V3/V8 are demo values without a cited source (only the IT critical humidity cites ASHRAE).
 - **Audit times** are stored as UTC `LocalDateTime`. Switching to `Instant` waits until we can show that existing entries still verify.
 - **Audit checkpoints** are kept in the same database the application writes. A copy somewhere the app cannot write would protect against a full rewrite by someone with database access.
