@@ -3,7 +3,7 @@
 #   scripts/evaluate-real-data.sh [path/to/energydata_complete.csv]   default: data/energydata_complete.csv
 # Writes docs/results/real-data-results.md, real-data-metrics.csv and chosen-hyperparameters.csv (small, committed)
 # and the candidate model files to data/candidates/ (large, git-ignored). Deterministic: re-running gives the same
-# numbers (only the measured inference times vary). Takes about 40 minutes on an 8-core laptop.
+# numbers (only the measured inference times vary). Takes about 30 minutes on an 8-core laptop.
 # Dataset: Candanedo, Feldheim & Deramaix (2017), UCI ML Repository, doi:10.24432/C5VC8G, CC BY 4.0.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

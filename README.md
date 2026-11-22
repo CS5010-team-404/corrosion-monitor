@@ -299,7 +299,7 @@ corrected where the code on `dev` shows otherwise):
 | Requirement                                                                      | Status    | Notes                                                                                                                                                                                                                                                                                                                                                                                                                               |
 |----------------------------------------------------------------------------------|-----------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | FR1: Read temperature and humidity from multiple sensors at adjustable intervals | Partial   | 12 simulated sensors (10 scenarios), a Raspberry Pi client and a signed ingestion API; sensor health with 7 rules. Each device has its own reporting interval (`expected_interval_s`, set when it is registered); admins can change it in Administration › Sensors (PR [#18](https://github.com/CS5010-team-404/corrosion-monitor/pull/18)).                                                                                        |
-| FR2: Forecast condensation 15–60 minutes ahead                                   | Partial   | Forecaster trained and evaluated ([docs/ML_FORECAST.md](docs/ML_FORECAST.md)) with a forecast API in the platform, which publishes forecasts to `sensor_forecasts` every minute. Analytics doesn't read them yet, so the forecast fields in equipment status are still empty.                                                                                                                                                       |
+| FR2: Forecast condensation 15–60 minutes ahead                                   | Partial   | Forecaster trained on simulated data and evaluated on real room data (UCI, [docs/ML_FORECAST.md](docs/ML_FORECAST.md), [model card](docs/MODEL_CARD.md)): it does not transfer, retrained models do better, none met the acceptance rule, so the bundled model is kept. The platform publishes forecasts to `sensor_forecasts` every minute; analytics doesn't read them yet, so the forecast fields in equipment status are still empty. |
 | FR3: Warning and critical alerts, with escalation                                | Partial   | Sensor-health signals become alerts; a critical alert not acknowledged in 5 minutes escalates and emails the managers; live updates on `/topic/alerts`. Analytics does not raise condensation-risk signals yet.                                                                                                                                                                                                                     |
 | FR4: Acknowledge alerts and record corrective actions                            | Done      | Acknowledge, resolve and corrective actions (type and notes), with a timeline in the UI.                                                                                                                                                                                                                                                                                                                                            |
 | FR5: Roles with enforced access levels                                           | Done      | Four roles. Rules are enforced on the server for every `/api/v1` path in both services (device ingestion is checked by its HMAC signature instead); refused requests are recorded as `ACCESS_DENIED`. Admins list accounts, unlock them and change roles in Administration › Users (audited; a role change applies from the next sign-in), PR [#22](https://github.com/CS5010-team-404/corrosion-monitor/pull/22).                  |
@@ -315,7 +315,8 @@ Phase 1 listed three roles; the team agreed on four (Technician, Operator, Manag
 - Analytics: the assessments endpoint (equipment history), forecast fields, and condensation-risk alert signals.
 - Reports: CSV and PDF exports (FR7).
 - Administration screens and APIs for equipment profiles and devices (FR8).
-- Retrain the forecaster on a real dataset.
+- Forecaster: a fresh, pre-registered evaluation of a smaller GBT trained on simulated + real data (it beat the bundled
+  model on real and simulated MAE but missed the false-alarm and size checks).
 - Audit: keep checkpoints somewhere the application cannot write.
 - First weekly release from `dev` to `main`, then security, sensor-failure and performance testing.
 - Final documentation, NIST control mapping and evaluation results.
@@ -336,6 +337,7 @@ Phase 1 listed three roles; the team agreed on four (Technician, Operator, Manag
 | Alert lifecycle is OPEN → ACKNOWLEDGED → RESOLVED (RESOLVED replaces CLOSED); alerts auto-resolve after a quiet period                                                                         | A condition that clears on its own should not leave an alert open forever, and a returning condition opens a new alert.                                               |
 | Equipment-profile editing (FR8) moved to the audit owner (Anela)                                                                                                                               | The endpoint had no owner and the Administration page needed it. Every change is audited, which fits the audit area.                                                  |
 | Deployment on Render with Aiven MySQL 8.4; tests run on MySQL 8.4 with Aiven's SQL settings                                                                                                    | It's a free hosted demo, and the tests catch SQL that would only fail in production (ANSI quotes, strict mode, required primary keys).                                |
+| Forecaster evaluated on real data (UCI Appliances Energy, 9 locations, leave-one-location-out and chronological) under a protocol fixed beforehand; the bundled simulated-data model is kept | It is worse than "no change" on real rooms, but no retrained candidate passed every acceptance check (the closest, GBT on simulated + real data, had more simulated false alarms and a 1.8 MB file) ([ML_FORECAST.md](docs/ML_FORECAST.md)). |
 
 ## Design patterns and principles applied
 
@@ -381,7 +383,10 @@ These are known limitations on `dev` at the time of writing, to address in QA. O
 - **Audit checkpoints** are kept in the same database the application writes. A copy somewhere the app cannot write would protect against a full rewrite by someone with database access.
 - **Duplicates to resolve:** the team `forecast` table versus the platform's `sensor_forecasts`, and the original `simulator/` module versus `platform/ecp-simulator`.
 - **Out-of-date document:** [docs/1-api-contract.md](docs/1-api-contract.md) still mentions an Auditor role and `/alerts/{id}/ack`; the code follows [docs/CONTRACTS.md](docs/CONTRACTS.md).
-- **Forecaster data:** the model is trained on simulated data and still needs retraining on a real dataset.
+- **Forecaster on real data:** the bundled model (trained on simulated data) is worse than "no change" on real rooms
+  (UCI house, 60-minute MAE 0.93 vs 0.44 °C). Retrained candidates are better but none passed the acceptance rule, so
+  it is kept; the forecast stays a hint next to the threshold rule. Real evaluation data is room air at 10-minute
+  resolution with an assumed surface offset, from one house in one season ([docs/ml-training-report.md](docs/ml-training-report.md)).
 
 ## Team contributions (Phase 3)
 
@@ -465,7 +470,8 @@ The live demo runs on Render as three services from [render.yaml](render.yaml): 
 | [docs/1-api-contract.md](docs/1-api-contract.md)                       | Original API contract (v1)                           |
 | [docs/SENSOR_HEALTH.md](docs/SENSOR_HEALTH.md)                         | Sensor health rules                                  |
 | [docs/ML_FORECAST.md](docs/ML_FORECAST.md)                             | Condensation forecaster                              |
-| [docs/ml-training-report.md](docs/ml-training-report.md)               | Forecaster training report                           |
+| [docs/ml-training-report.md](docs/ml-training-report.md)               | Forecaster training and real-data evaluation report  |
+| [docs/MODEL_CARD.md](docs/MODEL_CARD.md)                               | Forecaster model card                                |
 | [docs/4-simulator-design.md](docs/4-simulator-design.md)               | Sensor simulator design                              |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)                               | Render and Aiven deployment                          |
 | [docs/DEMO.md](docs/DEMO.md)                                           | Four-minute demo script                              |

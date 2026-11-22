@@ -39,13 +39,13 @@ slope × margin, margin floored at 3 °C). With less than 31 minutes of history 
 | Rule "margin ≤ 3 °C" | 17 min | 4.6 |
 
 **Honest limits.** Trained and tested on the project simulator, so these numbers show the method works, not
-real-world accuracy. Sudden failures (a dehumidifier dying) cannot be predicted from sensor history; recall
+real-world accuracy; on real rooms the bundled model is worse than "no change" (see "Real-data evaluation"). Sudden failures (a dehumidifier dying) cannot be predicted from sensor history; recall
 below 100% is expected. Use the model *together with* the threshold rule, never instead of it.
 
 ## Check on real data
-The UCI "Appliances Energy Prediction" dataset (doi:10.24432/C5VC8G) has real room temperature and humidity every
-10 minutes for 4.5 months. Download `energydata_complete.csv`, then `scripts/train-model.sh energydata_complete.csv`
-adds a per-room comparison against the "no change" baseline to the report (surface assumed 2 °C below air).
+Done: see "Real-data evaluation" below (protocol written first, then the results). In short, the bundled model does
+**not** transfer to real rooms, retrained models do better, and no candidate met the acceptance rule, so the bundled
+model is unchanged.
 
 ## Using it from analytics
 ```java
@@ -139,3 +139,75 @@ Randomness: none in the learners; simulated data uses the fixed production seeds
 If it passes, it is bundled with a version and training metadata, ridge stays bundled as the fallback, and the API
 and `sensor_forecasts.method` say which model made each forecast (`ML_GBT`, `ML_RIDGE`, `TREND`). If not, the
 production model stays and this document says so.
+
+## Real-data evaluation
+Run: `scripts/evaluate-real-data.sh` (about 30 minutes; deterministic). Generated tables:
+[`docs/results/real-data-results.md`](results/real-data-results.md) (every table), `real-data-metrics.csv` (all
+numbers, per location), `chosen-hyperparameters.csv` (every validation choice). Full write-up with limits:
+[`ml-training-report.md`](ml-training-report.md). Model card: [`MODEL_CARD.md`](MODEL_CARD.md).
+
+**Data and cleaning.** `energydata_complete.csv`, SHA-256 `2820bf71…a25d`, 19,735 rows, 2016-01-11 17:00 to
+2016-05-27 18:00. No cleaning rule removed anything: no unparsable rows, duplicate times or impossible values, and every
+location is one gap-free 10-minute segment.
+
+**Margin forecast, MAE (°C), leave-one-location-out, all 9 locations pooled, offset 1.5 °C** (\* +15 is interpolated):
+
+| Model | +15\* | +30 | +60 | +60 while moving |
+|---|---|---|---|---|
+| Bundled model (simulated data only) | 0.157 | 0.277 | 0.931 | 2.790 |
+| Persistence ("no change") | 0.131 | 0.246 | 0.441 | 2.829 |
+| Linear trend | 0.123 | 0.250 | 0.509 | 3.863 |
+| Ridge, real data | 0.112 | 0.234 | 0.459 | 2.500 |
+| Ridge, simulated + real | 0.108 | **0.211** | **0.398** | **2.422** |
+| GBT, real data | **0.107** | 0.215 | 0.421 | 2.550 |
+| GBT, simulated + real | **0.107** | 0.218 | 0.427 | 2.458 |
+
+Chronological split (train 11 Jan to mid-April, test the last 30 %, to 27 May): bundled 0.231 / 0.403 / 1.109, persistence 0.190 / 0.362 /
+0.659, best candidate GBT real 0.142 / 0.276 / 0.503. Eight indoor rooms only: bundled 0.099 / 0.167 / 0.795,
+persistence 0.082 / 0.154 / 0.271, GBT real 0.063 / 0.124 / 0.235.
+
+**Early warning, LOLO pooled** (523 events at 60 min, 54 crossings of 1 °C, almost all in the bathroom and outdoors):
+
+| | F1 30 | F1 60 | Median lead | False alarms / day |
+|---|---|---|---|---|
+| Bundled model | 0.15 | 0.06 | 5 min | 0.26 |
+| GBT, simulated + real | 0.22 | 0.18 | 10 min | 0.22 |
+| Linear trend | **0.28** | **0.30** | 20 min | 0.20 |
+| Rule "margin ≤ 3 °C" | 0.14 | 0.21 | 15 min | 0.16 |
+
+**What it shows.**
+1. The bundled model does not transfer: on real rooms it is worse than "no change" at every horizon (60 min: 0.93 vs
+   0.44 °C). A likely reason (not tested separately): real rooms change more slowly and smoothly than the simulator's
+   episodes, so weights learned for "a change is coming" overshoot, most at 60 minutes.
+2. Retraining on real data helps: every retrained model beats the bundled one everywhere, and GBT and ridge sim+real
+   beat persistence at every horizon (ridge on real data alone is slightly worse than persistence at 60 min: 0.459 vs
+   0.441). The gain over persistence is modest (about 5–10 % at 60 min), which is honest for 10-minute house data
+   with few events.
+3. On real data, early warning is hard for every learned model; the simple trend extrapolation warns best. Events are
+   rare and concentrated in two locations, so these F1 values rest on a handful of episodes.
+4. The surface offset barely changes the regression (with a fixed offset the *change* in margin does not depend on it;
+   only the level-based features do), but it changes how many events exist (304 / 523 / 801 at 0.5 / 1.5 / 3.0 °C)
+   and the warning numbers move with it. The bundled model's warnings are poor at every offset.
+
+**Decision: the bundled model stays** (`ridge-2026-11-03-s240`). Acceptance rule results (every check must pass):
+
+| Candidate | (a) real MAE lower | (b) sim MAE no worse | (c) F1 / false alarms | (d) speed / size |
+|---|---|---|---|---|
+| Ridge, real | pass | **fail** (1.05 vs 0.33 at +15) | **fail** (sim F1 0.01; 63.8 false alarms/day) | pass |
+| Ridge, sim + real | pass | **fail** (0.364 vs 0.331 at +15) | **fail** (sim F1 60: 0.28 vs 0.56) | pass |
+| GBT, real | pass | **fail** | **fail** | **fail** (1.8 MB) |
+| GBT, sim + real | pass | pass (0.245 / 0.455 / 1.076) | **fail**: sim false alarms 8.27 vs 5.60 per day | **fail**: 1.84 MB (inference 0.08 ms is fine) |
+
+The closest candidate, GBT trained on simulated + real data, is better on real rooms *and* on the simulator's MAE
+and F1, but raises more false alarms on simulated sensors and its file is too big. Both are fixable (fewer, shallower
+trees; a tuned warning threshold), but changing them after seeing the test results would break the protocol, so this
+is left as a next step with a fresh evaluation. Note also that check (a) turned out to be weak, because the bundled
+model is worse than persistence on real data; a future rule should also require beating persistence.
+
+**Deviations from the protocol.** None in data, splits, metrics or the rule. Clarifications: the rule was applied to
+each of the four recipes (none passed, so choosing between passing ones never arose); the simulated-test replay uses
+the protocol's one-reading bridge and "within the horizon" label, so its numbers differ slightly from the original
+simulated report (bundled false alarms 5.60/day here vs 4.2 there; MAEs are identical); the runs used Java 23 with the
+code compiled for Java 17; median inference times are measurements and vary slightly between runs, every other number
+is reproduced exactly.
+
