@@ -143,13 +143,12 @@ Corrosion Watch is running locally.
   Works now (backend + platform):
     Sign-in, Sensor health, Admin > simulator and devices, sensor forecasts,
     Alerts (list, detail, acknowledge, corrective actions, resolve; live on /topic/alerts) and the bell,
-    Audit log (managers and admins; Verify chain is admin-only),
+    Audit log with hashes and paging, Verify chain (managers and admins),
     Overview and Equipment (equipment status; forecast fields stay "–" until analytics fills them),
-    Admin > users (list, unlock, change role).
+    Reports (summary, CSV and PDF; managers and admins; risk-level figures wait for analytics),
+    Admin > users (list, unlock, change role), Admin > equipment profiles (list; edit via the API).
   Waiting for teammates' endpoints (these show "Not built yet" until they exist; docs/GAPS.md):
     Equipment chart           equipment history (assessments)    (Aayushee)
-    Reports                   report summary, CSV and PDF        (Aayushee with Dumebi)
-    Admin > profiles          /api/v1/profiles                   (team)
 
   Logs: .run/backend.log  .run/platform.log  .run/frontend.log
   Stop: scripts/stop-local.sh   (keeps the database; docker compose down -v to wipe it)
