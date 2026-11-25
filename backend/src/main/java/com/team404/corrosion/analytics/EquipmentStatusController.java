@@ -35,7 +35,8 @@ public class EquipmentStatusController {
      * 1 to seven days is cut to that range, as only seven days are kept), oldest first.
      */
     @GetMapping("/{id}/assessments")
-    public ResponseEntity<?> assessments(@PathVariable long id, @RequestParam(defaultValue = "60") int minutes) {
+    public ResponseEntity<?> assessments(@PathVariable("id") long id,
+                                         @RequestParam(name = "minutes", defaultValue = "60") int minutes) {
         Optional<List<AssessmentPoint>> points = analytics.assessments(id, minutes);
         if (points.isEmpty()) {
             return errors.response(HttpStatus.NOT_FOUND, "NOT_FOUND", "There is no equipment with id " + id + ".",
