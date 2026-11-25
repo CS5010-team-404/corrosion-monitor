@@ -21,10 +21,9 @@ export const login = async (email: string, password: string): Promise<T.LoginRes
 // Endpoints teammates haven't built yet, with owners (docs/GAPS.md). On 404/501 the page shows "isn't available yet"
 // instead of an error and stops polling; with VITE_MOCK_FALLBACK=true the mock backend answers them as sample data.
 // Platform and auth endpoints are not listed, so they are never replaced. Remove an entry once the endpoint ships.
-const pending = (key: string, what: string, endpoint: string, owner: string): Pending => ({ key, what, endpoint, owner });
-export const PENDING = {
-  assessments: pending("assessments", "Equipment history", "GET /api/v1/equipment/{id}/assessments", "Aayushee"),
-} as const;
+// Nothing is pending now. To list one, add `name: { key, what, endpoint, owner }` here and pass `PENDING.name` as the
+// third argument of api() (or post()) for that call.
+export const PENDING: Record<string, Pending> = {};
 
 // The picker's `to` is the start of the last chosen day; the backend's period is [from, to), so send the end of that day.
 const range = (from: number | null, to: number | null, location: string) =>
@@ -32,7 +31,7 @@ const range = (from: number | null, to: number | null, location: string) =>
 
 // analytics (Aayushee)
 export const equipmentStatus = () => api<T.EquipmentStatus[]>("/api/v1/equipment/status");
-export const assessments = (equipmentId: number, minutes: number) => api<T.AssessmentPoint[]>(`/api/v1/equipment/${equipmentId}/assessments${q({ minutes })}`, {}, PENDING.assessments);
+export const assessments = (equipmentId: number, minutes: number) => api<T.AssessmentPoint[]>(`/api/v1/equipment/${equipmentId}/assessments${q({ minutes })}`);
 
 // data platform (Joshua)
 export const forecast = (sensorId: number) => api<T.ForecastView>(`/api/v1/sensors/${sensorId}/forecast`);
