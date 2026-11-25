@@ -56,6 +56,12 @@ public class AuthService {
             return new LoginResult.BadCredentials(email, null, true);
         }
         AppUser user = found.get();
+        if (!user.isEnabled()) {
+            // Same answer and timing as a wrong password; the failure count is left alone.
+            passwords.matches(password, dummyHash);
+            audit.record(LoginAudit.USER_LOGIN_FAILED, user.getEmail(), user.getId(), Map.of("reason", "DISABLED"));
+            return new LoginResult.BadCredentials(email, user.getId(), false);
+        }
         Instant now = clock.instant();
         LoginPolicy.State before = user.loginState();
         // During a lock the password is not even checked: the answer is the same either way.
@@ -66,6 +72,7 @@ public class AuthService {
         String who = user.getEmail();
         return switch (decision.outcome()) {
             case SUCCESS -> {
+                user.recordLogin(now);
                 audit.record(LoginAudit.USER_LOGIN, who, id, Map.of("role", user.getRole().name()));
                 yield new LoginResult.Success(user);
             }

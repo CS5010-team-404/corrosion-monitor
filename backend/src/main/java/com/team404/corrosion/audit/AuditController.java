@@ -17,7 +17,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * View of the audit log (list: managers and admins; verify and checkpoints: admins only), with the paths and field names the dashboard expects (docs/GAPS.md). The role is
+ * View of the audit log (list and verify: managers and admins; verifications and checkpoints: admins only), with the
+ * paths and field names the dashboard expects (docs/CONTRACTS.md, frontend/src/api/types.ts). The role is
  * checked here on the server from the token's roles claim, so hiding a button in the UI is never the only protection.
  * Refused requests are themselves recorded (ACCESS_DENIED).
  */
@@ -37,8 +38,9 @@ public class AuditController {
     }
 
     /**
-     * Newest first, as a JSON array. All filters are optional. from is inclusive and to is exclusive (ISO-8601
-     * instants). page starts at 0 and size is capped at 200.
+     * One page, newest first: {items, page, size, total}. All filters are optional. from is inclusive and to is
+     * exclusive (ISO-8601 instants). page starts at 0; size defaults to 50 and is capped at 200 (the response says
+     * which page and size were actually used). total counts every entry that matches the filters.
      */
     @GetMapping
     public ResponseEntity<?> list(@AuthenticationPrincipal Jwt jwt,
@@ -55,16 +57,16 @@ public class AuditController {
         }
         AuditStore.Filter filter = new AuditStore.Filter(blankToNull(actor), blankToNull(action),
                 blankToNull(entityType), toLocal(from), toLocal(to));
-        List<AuditViews.EntryView> entries = audit.search(filter, page, size).items().stream()
-                .map(AuditViews::entry)
-                .toList();
-        return ResponseEntity.ok(entries);
+        return ResponseEntity.ok(AuditViews.page(audit.search(filter, page, size)));
     }
 
-    /** Walks the whole chain and returns {intact, checked, firstBrokenId, message}. Also stored, see /verifications. */
+    /**
+     * Walks the whole chain and returns {intact, checked, firstBrokenId, message}. Managers and admins (the contract).
+     * Also stored, see /verifications.
+     */
     @PostMapping("/verify")
     public ResponseEntity<?> verify(@AuthenticationPrincipal Jwt jwt) {
-        ResponseEntity<?> denied = requireAdmin(jwt, "POST /api/v1/audit/verify");
+        ResponseEntity<?> denied = requireRole(jwt, "POST /api/v1/audit/verify", false);
         if (denied != null) {
             return denied;
         }
@@ -105,7 +107,7 @@ public class AuditController {
         return requireRole(jwt, endpoint, true);
     }
 
-    /** adminOnly false also lets MANAGER through (the audit list); verify, checkpoints stay admin-only. */
+    /** adminOnly false also lets MANAGER through (list, verify); verifications and checkpoints stay admin-only. */
     private ResponseEntity<?> requireRole(Jwt jwt, String endpoint, boolean adminOnly) {
         if (jwt == null) {
             return errors.response(HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED", "Sign in required.", Map.of());

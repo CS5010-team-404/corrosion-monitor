@@ -52,7 +52,7 @@ export function Alerts() {
     <>
       <PageHead title="Alerts" sub="Unacknowledged critical alerts escalate to the manager after 5 minutes." actions={<Button size="sm" onClick={async () => { await list.reload(); toast("Alerts up to date"); }}><Icon name="refresh" />Refresh</Button>} />
       <Tabs value={tab} onChange={setTab} items={([["active", "Active"], ["OPEN", "Open"], ["ACKNOWLEDGED", "Acknowledged"], ["RESOLVED", "Resolved"], ["all", "All"]] as [Tab, string][]).map(([key, l]) => ({ key, label: l, count: all.filter((a) => inTab(a, key)).length }))} />
-      <DataTable rows={rows} initialSort={{ key: "opened", dir: "desc" }} selectable={can("TECHNICIAN", "ADMIN")} onRowClick={(a) => openAlert(a.id)} isSelected={(a) => a.id === selected}
+      <DataTable rows={rows} initialSort={{ key: "opened", dir: "desc" }} tableId="alerts" selectable={can("TECHNICIAN", "ADMIN")} onRowClick={(a) => openAlert(a.id)} isSelected={(a) => a.id === selected}
         bulk={(ids, clear) => <Button size="sm" variant="primary" busy={busy} onClick={() => bulkAck(ids, clear)}><Icon name="check" />Acknowledge</Button>}
         emptyTitle="No alerts here" emptyText="New problems appear here within seconds."
         tools={<>

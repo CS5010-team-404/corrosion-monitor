@@ -4,8 +4,8 @@ import { config } from "./config";
 import { StompClient } from "./stomp";
 
 // Topics: /topic/readings and /topic/health come from the data platform; /topic/risk and /topic/alerts from the
-// team backend, which has no /ws yet, so those connect only with VITE_BACKEND_LIVE=true. In mock mode nothing
-// connects. Pages poll either way, so live updates only make them faster.
+// team backend's /ws, which connect only with VITE_BACKEND_LIVE=true (scripts/run-local.sh sets it). In mock mode
+// nothing connects. Pages poll either way, so live updates only make them faster.
 const PLATFORM_TOPICS = ["/topic/readings", "/topic/health"];
 const clients: Record<string, StompClient> = {};
 

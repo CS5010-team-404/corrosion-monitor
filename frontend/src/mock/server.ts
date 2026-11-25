@@ -12,8 +12,20 @@ const sim: any = simJs;
 const { S } = sim;
 const iso = (t: number | null | undefined) => (t == null ? null : new Date(t).toISOString());
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-let failedLogins = 0;
+let failedLogins = 0; // unknown emails only; demo accounts count their own failures
 let actionSeq = 1;
+
+// app_user for the mock: the four demo accounts, with their own failure counts and locks.
+interface MockUser { id: number; email: string; fullName: string; role: T.Role; enabled: boolean; failed: number; lockedUntil: string | null; lastLoginAt: string | null }
+const DEMO_EMAIL: Record<string, string> = { ADMIN: "admin@corrosionwatch.app", MANAGER: "manager@corrosionwatch.app", OPERATOR: "operator@corrosionwatch.app", TECHNICIAN: "tech@corrosionwatch.app" };
+const users: MockUser[] = Object.entries(sim.ROLE_NAMES as Record<string, string>).map(([r, n], i) => ({
+  id: i + 1, email: DEMO_EMAIL[r], fullName: n, role: r as T.Role, enabled: true, failed: 0, lockedUntil: null, lastLoginAt: iso(Date.now() - (i + 1) * 3600e3),
+}));
+const userView = (u: MockUser): T.User => ({
+  id: u.id, username: u.email, fullName: u.fullName, email: u.email, role: u.role, enabled: u.enabled,
+  lockedUntil: u.lockedUntil && Date.parse(u.lockedUntil) > Date.now() ? u.lockedUntil : null, lastLoginAt: u.lastLoginAt,
+});
+const sessionEmail = () => (sessionStorage.getItem("cw.session") ? String(JSON.parse(sessionStorage.getItem("cw.session")!).username) : "admin@corrosionwatch.app");
 
 const eqById = (id: number) => S.eq.find((e: any) => e.id === id);
 const sensorIdOf = (e: any) => S.eq.indexOf(e) + 1;
@@ -34,7 +46,7 @@ function status(e: any): T.EquipmentStatus {
 function health(e: any): T.SensorHealth {
   const h = S.health[e.dev];
   const conn = h.issues.includes("OFFLINE") ? "OFFLINE" : "ONLINE";
-  return { sensorId: sensorIdOf(e), deviceId: e.dev, kind: "SIMULATED", model: "SIM-SHT31", expectedIntervalSeconds: 15, equipmentId: e.id,
+  return { sensorId: sensorIdOf(e), deviceId: e.dev, kind: "SIMULATED", model: "SIM-SHT31", expectedIntervalSeconds: e.intervalS ?? 15, equipmentId: e.id,
     equipmentName: e.name, locationName: e.loc, status: h.status, connectivity: conn, score: h.score, trusted: h.trusted, issues: h.issues,
     lastSeenAt: iso(h.lastSeen), missingPct: h.missing, signatureFailures: h.issues.includes("SIGNATURE_FAILURES") ? 5 : 0, statusSince: null };
 }
@@ -53,7 +65,7 @@ const actor = () => ({ ADMIN: "admin", MANAGER: "manager", OPERATOR: "operator",
 
 function levels(from: number | null, to: number | null, loc: string | null) {
   return S.eq.filter((e: any) => !loc || e.loc === loc).map((e: any) => {
-    const pts = e.hist.filter((x: any) => (!from || x.ts >= from) && (!to || x.ts <= to + 86400000));
+    const pts = e.hist.filter((x: any) => (!from || x.ts >= from) && (!to || x.ts < to));
     let ok = 0, w = 0, c = 0;
     pts.forEach((x: any) => { const m = x.surface - x.dew; if (m <= e.prof.mCrit || x.rh >= e.prof.rhCrit) c++; else if (m <= e.prof.mWarn || x.rh >= e.prof.rhWarn) w++; else ok++; });
     const n = Math.max(1, pts.length);
@@ -71,19 +83,20 @@ async function handle(path: string, init: RequestInit): Promise<unknown> {
 
   if (p === "/api/v1/auth/login") {
     // Same contract as the backend: the four demo emails (any password here), one message for unknown email and
-    // wrong password, and the fifth failure locks the account (423). The password "wrong" counts as a failure.
-    const locked = () => new ApiError(423, `Account locked after 5 failed sign-ins. Try again after ${iso(Date.now() + 15 * 60e3)} (UTC).`);
-    if (failedLogins >= 5) throw locked();
-    const roles: Record<string, T.Role> = { "admin@corrosionwatch.app": "ADMIN", "manager@corrosionwatch.app": "MANAGER", "operator@corrosionwatch.app": "OPERATOR", "tech@corrosionwatch.app": "TECHNICIAN" };
+    // wrong password, and the fifth failure locks that account (423) until an admin unlocks it or 15 minutes pass.
+    // The password "wrong" counts as a failure.
     const email = String(body.email ?? "").trim().toLowerCase();
-    const r = roles[email];
-    if (!r || body.password === "wrong") {
-      if (++failedLogins >= 5) throw locked();
+    const u = users.find((x) => x.email === email);
+    const locked = (until: number) => new ApiError(423, `Account locked after 5 failed sign-ins. Try again after ${iso(until)} (UTC).`);
+    if (u?.lockedUntil && Date.parse(u.lockedUntil) > Date.now()) throw locked(Date.parse(u.lockedUntil));
+    if (!u) { if (++failedLogins >= 5) throw locked(Date.now() + 15 * 60e3); throw new ApiError(401, "Incorrect email or password."); }
+    if (body.password === "wrong") {
+      if (++u.failed >= 5) { u.lockedUntil = iso(Date.now() + 15 * 60e3); sim.addAudit(email, "ACCOUNT_LOCKED", "user", u.id); throw locked(Date.now() + 15 * 60e3); }
       throw new ApiError(401, "Incorrect email or password.");
     }
-    failedLogins = 0;
-    sim.addAudit(email, "USER_LOGIN", "user", email);
-    return { token: `mock.${r}`, expiresAt: iso(Date.now() + 8 * 3600e3), email, fullName: sim.ROLE_NAMES[r], role: r };
+    u.failed = 0; u.lockedUntil = null; u.lastLoginAt = iso(Date.now());
+    sim.addAudit(email, "USER_LOGIN", "user", u.id);
+    return { token: `mock.${u.role}`, expiresAt: iso(Date.now() + 8 * 3600e3), email, fullName: u.fullName, role: u.role };
   }
   if (p === "/api/v1/equipment/status") return S.eq.map(status);
   if ((m = p.match(/^\/api\/v1\/equipment\/(\d+)\/assessments$/))) {
@@ -104,12 +117,23 @@ async function handle(path: string, init: RequestInit): Promise<unknown> {
   }
   if (p === "/api/v1/health/events") return S.events.slice(0, +(qp.get("limit") || 50)).map(eventView);
   if (p === "/api/v1/health/services") return S.services.map((s: any) => ({ service: s.name, state: s.state, lastRunAt: iso(sim.now() - 2000), lastError: null, errorCount: 0 }));
-  if (p === "/api/v1/sensors") return S.eq.map((e: any) => ({ id: sensorIdOf(e), deviceId: e.dev, kind: "SIMULATED", model: "SIM-SHT31", expectedIntervalS: 15, active: true, equipmentId: e.id, equipmentName: e.name, locationName: e.loc }));
+  const device = (e: any): T.Device => ({ id: sensorIdOf(e), deviceId: e.dev, kind: "SIMULATED", model: "SIM-SHT31", expectedIntervalS: e.intervalS ?? 15, active: true, equipmentId: e.id, equipmentName: e.name, locationName: e.loc });
+  if (p === "/api/v1/sensors") return S.eq.map(device);
+  if ((m = p.match(/^\/api\/v1\/admin\/sensors\/(\d+)$/)) && method === "PATCH") {
+    // Same rules as the platform: admins only, whole seconds from 5 to 3600, audited when it changes.
+    if (role() !== "ADMIN") throw new ApiError(403, "Forbidden");
+    const e = S.eq[+m[1] - 1];
+    if (!e) throw new ApiError(404, `No sensor ${m[1]}`);
+    const n = body.expectedIntervalS;
+    if (!Number.isInteger(n) || n < 5 || n > 3600) throw new ApiError(400, "expectedIntervalS must be between 5 and 3600 seconds");
+    if (n !== (e.intervalS ?? 15)) { e.intervalS = n; sim.addAudit(actor(), "SENSOR_INTERVAL_CHANGED", "sensor", e.dev); }
+    return device(e);
+  }
   if (p === "/api/v1/admin/sensors" && method === "POST") {
     sim.addAudit(actor(), "SENSOR_REGISTERED", "sensor", body.deviceId);
     return { deviceId: body.deviceId, secret: Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"[b % 64]).join("") };
   }
-  if (p === "/api/v1/admin/simulator") return S.eq.map((e: any) => ({ deviceId: e.dev, scenario: e.scenario, intervalSeconds: 15, lastHttpStatus: 202, sent: 0, failed: 0 }));
+  if (p === "/api/v1/admin/simulator") return S.eq.map((e: any) => ({ deviceId: e.dev, scenario: e.scenario, intervalSeconds: e.intervalS ?? 15, lastHttpStatus: 202, sent: 0, failed: 0 }));
   if (p === "/api/v1/admin/simulator/scenarios") return sim.SCENARIOS.map(([name, description]: string[]) => ({ name, description }));
   if ((m = p.match(/^\/api\/v1\/admin\/simulator\/([^/]+)\/scenario$/))) {
     const e = S.eq.find((x: any) => x.dev === decodeURIComponent(m![1])); e.scenario = body.scenario; e.since = sim.now();
@@ -124,13 +148,21 @@ async function handle(path: string, init: RequestInit): Promise<unknown> {
     if (m[2] === "actions") { a.actions.push({ type: body.actionType, notes: body.notes, by: who, at: sim.now() }); sim.addAudit(who, "CORRECTIVE_ACTION_LOGGED", "alert", a.id); return actionView(a.actions[a.actions.length - 1]); }
     return alertView(a);
   }
-  if (p === "/api/v1/audit") return S.audit.map((a: any) => ({ id: a.id, occurredAt: iso(a.at), actorType: ["alerts", "sensor-health"].includes(a.actor) ? "SYSTEM" : "USER", actor: a.actor, action: a.action, entityType: a.entity, entityId: String(a.entityId), prevHash: a.prev, hash: S.tampered && a === S.audit[12] ? "e" + a.hash.slice(1) : a.hash }));
+  const auditView = (a: any) => ({ id: a.id, occurredAt: iso(a.at), actorType: ["alerts", "sensor-health"].includes(a.actor) ? "SYSTEM" : "USER", actor: a.actor, action: a.action, entityType: a.entity, entityId: String(a.entityId), prevHash: a.prev, hash: S.tampered && a === S.audit[12] ? "e" + a.hash.slice(1) : a.hash });
+  if (p === "/api/v1/audit") {
+    // The agreed paged shape { items, page, size, total }, newest first, with the backend's filters (exact actor, from/to).
+    const page = Math.max(0, +(qp.get("page") ?? 0)), size = Math.min(200, Math.max(1, +(qp.get("size") ?? 50)));
+    const from = qp.get("from") ? Date.parse(qp.get("from")!) : null, to = qp.get("to") ? Date.parse(qp.get("to")!) : null;
+    const all = [...S.audit].filter((a: any) => (!qp.get("actor") || a.actor === qp.get("actor")) && (from == null || a.at >= from) && (to == null || a.at < to))
+      .sort((x: any, y: any) => y.id - x.id);
+    return { items: all.slice(page * size, page * size + size).map(auditView), page, size, total: all.length };
+  }
   if (p === "/api/v1/audit/verify") { await wait(900); return S.tampered ? { intact: false, checked: S.audit.length, firstBrokenId: S.audit[12].id } : { intact: true, checked: S.audit.length, firstBrokenId: null }; }
   if (p === "/api/v1/mock/tamper") { S.tampered = !!body.on; return { tampered: S.tampered }; }
   if (p === "/api/v1/reports/summary" || p === "/api/v1/reports/summary.csv" || p === "/api/v1/reports/summary.pdf") {
     const from = qp.get("from") ? Date.parse(qp.get("from")!) : null, to = qp.get("to") ? Date.parse(qp.get("to")!) : null, loc = qp.get("location");
     const eqIds = new Set(S.eq.filter((e: any) => !loc || e.loc === loc).map((e: any) => e.id));
-    const al = S.alerts.filter((a: any) => eqIds.has(a.eqId) && (!from || a.opened >= from) && (!to || a.opened < to + 86400000));
+    const al = S.alerts.filter((a: any) => eqIds.has(a.eqId) && (!from || a.opened >= from) && (!to || a.opened < to));
     const acked = al.filter((a: any) => a.ack);
     const summary: T.ReportSummary = { from: iso(from), to: iso(to), alertsOpened: al.length, meanMinutesToAcknowledge: acked.length ? acked.reduce((s: number, a: any) => s + (a.ack - a.opened), 0) / acked.length / 60000 : null,
       correctiveActions: al.reduce((s: number, a: any) => s + a.actions.length, 0), equipment: levels(from, to, loc) };
@@ -142,7 +174,27 @@ async function handle(path: string, init: RequestInit): Promise<unknown> {
     return summary;
   }
   if (p === "/api/v1/profiles") return Object.values(sim.PROFILES).map((x: any, i: number) => ({ id: i + 1, name: x.name, rhWarningPct: x.rhWarn, rhCriticalPct: x.rhCrit, marginWarningC: x.mWarn, marginCriticalC: x.mCrit, tempMinC: x.tMin, tempMaxC: x.tMax, surfaceOffsetC: x.offset }));
-  if (p === "/api/v1/admin/users") return Object.entries(sim.ROLE_NAMES).map(([r, n]: [string, any], i) => ({ id: i + 1, username: ({ ADMIN: "admin", MANAGER: "manager", OPERATOR: "operator", TECHNICIAN: "tech" } as any)[r], fullName: n, email: null, role: r, enabled: true, lockedUntil: null, lastLoginAt: iso(sim.now() - (i + 1) * 3600e3) }));
+  if (p === "/api/v1/admin/users") return users.map(userView);
+  if ((m = p.match(/^\/api\/v1\/admin\/users\/(\d+)(\/unlock)?$/))) {
+    // Same rules as the backend's UserAdminService: audited, no self-demotion, never remove the last admin.
+    const u = users.find((x) => x.id === +m![1]);
+    if (!u) throw new ApiError(404, `No user with id ${m[1]}.`);
+    const me = sessionEmail();
+    if (m[2] && method === "POST") {
+      if (u.failed || u.lockedUntil) { u.failed = 0; u.lockedUntil = null; sim.addAudit(me, "ACCOUNT_UNLOCKED", "user", u.id); }
+      return userView(u);
+    }
+    if (method === "PATCH") {
+      const to = String(body.role ?? "").toUpperCase() as T.Role;
+      if (!["TECHNICIAN", "OPERATOR", "MANAGER", "ADMIN"].includes(to)) throw new ApiError(400, "role must be one of TECHNICIAN, OPERATOR, MANAGER, ADMIN.");
+      if (u.role === "ADMIN" && to !== "ADMIN") {
+        if (u.email === me) throw new ApiError(409, "You can't remove your own administrator role. Ask another administrator to change it.");
+        if (!users.some((x) => x !== u && x.role === "ADMIN" && x.enabled)) throw new ApiError(409, "This is the last administrator. Make someone else an administrator before changing this role.");
+      }
+      if (u.role !== to) { sim.addAudit(me, "USER_ROLE_CHANGED", "user", u.id); u.role = to; }
+      return userView(u);
+    }
+  }
   throw new ApiError(404, `Mock has no handler for ${method} ${p}`);
 }
 

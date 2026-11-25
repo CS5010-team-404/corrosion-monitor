@@ -1,8 +1,8 @@
 import { createElement } from "react";
 import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { PENDING, alerts, equipmentStatus, sensorsHealth, users } from "../api/endpoints";
-import { ApiError, NotBuiltError, isSample } from "../lib/api";
+import { PENDING, alerts, assessments, equipmentStatus, profiles, sensorsHealth, users } from "../api/endpoints";
+import { ApiError, NotBuiltError, api, isSample } from "../lib/api";
 import { config } from "../lib/config";
 import { ErrorState } from "../components/ui";
 import { MAX_FAILED_ATTEMPTS, StompClient, retryDelay } from "../lib/stomp";
@@ -21,16 +21,18 @@ describe("endpoints that aren't built yet", () => {
 
   it("turns a 404 into NotBuiltError with the endpoint and owner, then stops requesting it", async () => {
     fetchMock.mockResolvedValue(respond(404));
-    const err = await equipmentStatus().catch((e) => e);
+    const err = await assessments(1, 120).catch((e) => e);
     expect(err).toBeInstanceOf(NotBuiltError);
-    expect(err.message).toBe("Equipment status isn't available yet. It needs GET /api/v1/equipment/status (owner: Aayushee).");
-    await expect(equipmentStatus()).rejects.toBeInstanceOf(NotBuiltError);
+    expect(err.message).toBe("Equipment history isn't available yet. It needs GET /api/v1/equipment/{id}/assessments (owner: Aayushee).");
+    await expect(assessments(1, 120)).rejects.toBeInstanceOf(NotBuiltError);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("treats 501 the same way", async () => {
     fetchMock.mockResolvedValue(respond(501));
-    await expect(users()).rejects.toMatchObject({ status: 501, pending: PENDING.users });
+    // assessments is the only pending endpoint and the test above already marked it not built, so use a fresh entry.
+    const fresh = { ...PENDING.assessments, key: "assessments-501" };
+    await expect(api("/api/v1/equipment/1/assessments", {}, fresh)).rejects.toMatchObject({ status: 501, pending: fresh });
   });
 
   it("never treats a real (platform) endpoint's 404 as not built, and never falls back for it", async () => {
@@ -45,9 +47,46 @@ describe("endpoints that aren't built yet", () => {
   it("with VITE_MOCK_FALLBACK answers a not-built endpoint from the mock and marks the data as sample", async () => {
     config.mockFallback = true;
     fetchMock.mockResolvedValue(respond(404));
-    const list = await alerts("ALL", 10);
+    const list = await assessments(1, 120);
     expect(Array.isArray(list)).toBe(true);
     expect(isSample(list)).toBe(true);
+  });
+
+  it("treats equipment profiles as built: a 404 is a real error, never sample data", async () => {
+    config.mockFallback = true;
+    fetchMock.mockResolvedValue(respond(404, { message: "No such path" }));
+    const err = await profiles().catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).not.toBeInstanceOf(NotBuiltError);
+    expect(isSample(err)).toBe(false);
+    expect(PENDING).not.toHaveProperty("profiles");
+  });
+
+  it("treats equipment status as built: a 404 is a real error, never sample data", async () => {
+    config.mockFallback = true;
+    fetchMock.mockResolvedValue(respond(404, { message: "No such path" }));
+    const err = await equipmentStatus().catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).not.toBeInstanceOf(NotBuiltError);
+  });
+
+  it("treats the alert endpoints as built: a 404 is a real error, never sample data", async () => {
+    config.mockFallback = true;
+    fetchMock.mockResolvedValue(respond(404, { message: "Alert 99 not found." }));
+    const err = await alerts("ALL", 10).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).not.toBeInstanceOf(NotBuiltError);
+    expect(err.message).toBe("Alert 99 not found.");
+  });
+
+  it("treats the admin user list as built: a 404 is a real error, never sample data", async () => {
+    config.mockFallback = true;
+    fetchMock.mockResolvedValue(respond(404, { message: "No such path" }));
+    const err = await users().catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).not.toBeInstanceOf(NotBuiltError);
+    expect(isSample(err)).toBe(false);
+    expect(PENDING).not.toHaveProperty("users");
   });
 
   it("keeps real data unmarked", async () => {
@@ -58,9 +97,9 @@ describe("endpoints that aren't built yet", () => {
 
 describe("not built yet panel", () => {
   it("shows the calm panel with endpoint and owner instead of the error state", () => {
-    render(createElement(ErrorState, { error: new NotBuiltError(404, PENDING.auditLog), onRetry: () => {} }));
+    render(createElement(ErrorState, { error: new NotBuiltError(404, PENDING.assessments), onRetry: () => {} }));
     expect(screen.getByText("Not built yet")).toBeTruthy();
-    expect(screen.getByText(/It needs GET \/api\/v1\/audit \(owner: Anela\)/)).toBeTruthy();
+    expect(screen.getByText(/It needs GET \/api\/v1\/equipment\/\{id\}\/assessments \(owner: Aayushee\)/)).toBeTruthy();
     expect(screen.queryByText("Could not load this page")).toBeNull();
   });
 });

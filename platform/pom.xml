@@ -33,6 +33,9 @@
 
   <dependencyManagement>
     <dependencies>
+      <!-- Same pin as backend/pom.xml: Spring Boot 3.4.1's Testcontainers 1.20.4 asks Docker Engine 29+ for an API
+           version it rejects (HTTP 400); 1.21.x negotiates it. Test scope only. -->
+      <dependency><groupId>org.testcontainers</groupId><artifactId>testcontainers-bom</artifactId><version>1.21.4</version><type>pom</type><scope>import</scope></dependency>
       <dependency><groupId>edu.neu.ecp</groupId><artifactId>ecp-common</artifactId><version>${project.version}</version></dependency>
       <dependency><groupId>edu.neu.ecp</groupId><artifactId>ecp-simulator</artifactId><version>${project.version}</version></dependency>
       <dependency><groupId>edu.neu.ecp</groupId><artifactId>ecp-forecast</artifactId><version>${project.version}</version></dependency>

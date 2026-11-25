@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class HealthEvaluatorTest {
@@ -51,6 +52,62 @@ class HealthEvaluatorTest {
         Evaluation overdue = evaluator.evaluate(new Observation(old, List.of(), null, 0, NOW));
         assertTrue(overdue.detected().contains(HealthIssue.OFFLINE));
         assertEquals(true, overdue.evidence().get(HealthIssue.OFFLINE).get("neverReported"));
+    }
+
+    @Test
+    void silentSensorIsNotOfflineDuringStartupGrace() {
+        // last reading 10 min ago (the platform was down); the platform started 1 min ago, grace is 3 min
+        List<ReadingSample> old = normal(10, NOW.minusSeconds(600));
+        Instant lastSeen = old.get(old.size() - 1).receivedAt();
+        Evaluation e = evaluator.evaluate(new Observation(SENSOR, old, lastSeen, 0, NOW, NOW.minusSeconds(60)));
+        assertEquals(Connectivity.LATE, e.connectivity());
+        assertFalse(e.detected().contains(HealthIssue.OFFLINE));
+        assertEquals(Set.of(HealthIssue.OFFLINE), e.undecided());
+        assertEquals(HealthStatus.DEGRADED, HealthAssessment.from(e, e.detected()).status());
+    }
+
+    @Test
+    void silentSensorIsOfflineOnceTheGraceIsOver() {
+        List<ReadingSample> old = normal(10, NOW.minusSeconds(600));
+        Instant lastSeen = old.get(old.size() - 1).receivedAt();
+        Evaluation e = evaluator.evaluate(new Observation(SENSOR, old, lastSeen, 0, NOW, NOW.minusSeconds(180)));
+        assertEquals(Connectivity.OFFLINE, e.connectivity());
+        assertTrue(e.detected().contains(HealthIssue.OFFLINE));
+        assertTrue(e.undecided().isEmpty());
+    }
+
+    @Test
+    void neverSeenSensorStaysUnknownDuringStartupGrace() {
+        SensorRef old = new SensorRef(9L, "SIM-009", 1L, Duration.ofSeconds(15), NOW.minusSeconds(600));
+        Evaluation e = evaluator.evaluate(new Observation(old, List.of(), null, 0, NOW, NOW.minusSeconds(10)));
+        assertEquals(Connectivity.NEVER_SEEN, e.connectivity());
+        assertTrue(e.detected().isEmpty());
+    }
+
+    @Test
+    void graceDoesNotHideOtherIssuesOrAnOnlineSensor() {
+        List<ReadingSample> window = new ArrayList<>(normal(10, NOW.minusSeconds(305)));
+        window.addAll(series(20, NOW.minusSeconds(5), i -> new double[] {23.41, 51.20}));
+        List<ReadingSample> stuck = renumber(window);
+        Evaluation e = evaluator.evaluate(new Observation(SENSOR, stuck, stuck.get(stuck.size() - 1).receivedAt(), 0,
+                NOW, NOW.minusSeconds(30)));
+        assertEquals(Connectivity.ONLINE, e.connectivity());
+        assertTrue(e.detected().contains(HealthIssue.STUCK));
+        assertTrue(e.undecided().isEmpty());
+    }
+
+    @Test
+    void zeroGraceMeansNoGrace() {
+        HealthPolicy d = HealthPolicy.defaults();
+        HealthPolicy noGrace = new HealthPolicy(d.lateFactor(), d.offlineFactor(), d.window(), d.stuckMinReadings(),
+                d.stuckEpsilon(), d.tempMinC(), d.tempMaxC(), d.humidityMinPct(), d.humidityMaxPct(),
+                d.outOfRangeMinCount(), d.spikeTempC(), d.spikeHumidityPct(), d.erraticMinSpikes(), d.lossyMissingPct(),
+                d.lossyMinExpected(), d.signatureFailureMin(), d.clockSkewThreshold(), d.recoveryEvaluations(),
+                Duration.ZERO);
+        List<ReadingSample> old = normal(10, NOW.minusSeconds(600));
+        Evaluation e = new HealthEvaluator(noGrace).evaluate(new Observation(SENSOR, old,
+                old.get(old.size() - 1).receivedAt(), 0, NOW, NOW.minusSeconds(1)));
+        assertTrue(e.detected().contains(HealthIssue.OFFLINE));
     }
 
     @Test

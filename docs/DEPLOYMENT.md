@@ -85,10 +85,43 @@ scripts/send-reading.sh SIM-001 '<secret>' https://corrosion-watch-platform.onre
 ```
 Open the web URL, sign in, and watch the simulated devices appear within a minute.
 
+## 6. Escalation e-mail (SMTP)
+When a CRITICAL alert stays unacknowledged for 5 minutes the backend emails every `MANAGER` user. Mail is best effort:
+the escalation and its audit event are saved first, a mail failure is only logged, and the timeouts below keep a slow
+or unreachable server from holding up the escalation job. Locally the defaults send to MailHog (`localhost:1025`,
+inbox at http://localhost:8025), so nothing needs setting.
+
+Set these on corrosion-watch-api → Environment (all `sync: false`; never commit them):
+
+| Variable | Example | Notes |
+|---|---|---|
+| `SPRING_MAIL_HOST` | `smtp-relay.brevo.com` | default `localhost` (MailHog) |
+| `SPRING_MAIL_PORT` | `587` | default `1025`; use 587 (or 2525), not 25 or 465 |
+| `SPRING_MAIL_USERNAME` | the provider's SMTP login | empty = no sign-in (MailHog) |
+| `SPRING_MAIL_PASSWORD` | the provider's SMTP key / app password | |
+| `ECP_ALERTS_MAIL_FROM` | `alerts@yourdomain` | must be a sender the provider has verified; default `alerts@corrosionwatch.app` |
+| `SPRING_MAIL_STARTTLS` | `true` | optional; default `true` (STARTTLS whenever the server offers it) |
+
+Fixed in `application.properties`: connection timeout 5 s, read and write timeouts 10 s.
+
+Free SMTP services that work (pick one):
+- **Brevo** (300 emails/day free): host `smtp-relay.brevo.com`, port 587 (or 2525), username = the SMTP login shown
+  under SMTP & API, password = an SMTP key. Verify the sender address first.
+- **Mailtrap**: the Sandbox (`sandbox.smtp.mailtrap.io`, port 2525 or 587) catches every message in a test inbox,
+  which is ideal for the demo since no real mail goes out; Email Sending (`live.smtp.mailtrap.io`, 587) needs a
+  verified domain.
+- **Gmail app password**: host `smtp.gmail.com`, port 587, username = the Gmail address, password = a 16-character
+  app password (Google account → Security → 2-Step Verification → App passwords). `ECP_ALERTS_MAIL_FROM` must be that
+  Gmail address. Gmail does not offer 2525.
+
+Check it: make a manager user with a real inbox (or use the Mailtrap sandbox), raise a CRITICAL alert (on the Simulator page,
+set a device to `SILENT`: sensor health reports it OFFLINE, which is CRITICAL), leave it unacknowledged for 5 minutes, and look for "Emailed 1 manager(s) about
+escalated alert N" in the backend log (or "Could not email managers about alert N: ..." with the reason).
+
 ## Notes
 - Free web services sleep after 15 idle minutes; the platform must not (simulator, health checks), hence Starter.
-- Render's Free and Starter plans block outbound SMTP ports; send alert e-mails through an HTTPS e-mail API, or keep
-  notifications in the app.
+- Render blocks outbound SMTP on Free instances (ports 25, 465, 587) and port 25 everywhere. The backend runs on
+  Starter, where 587 works; 2525 is a fallback for providers that offer it (section 6).
 - The demo devices link to equipment ids 1-12, which V3 creates with the same names. To point a device at another
   item: `UPDATE sensors SET equipment_id = <id>, equipment_name = '<name>', location_name = '<loc>' WHERE device_id = 'SIM-001';`
 - Local: `docker compose -f docker-compose.platform.yml up --build`, then `cd frontend && npm run dev`.

@@ -5,7 +5,6 @@ import java.util.TimeZone;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
-import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * The Corrosion Watch data platform as its own service: device ingestion, the simulator, sensor health and the
@@ -13,7 +12,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * tables (readings, sensor_health, alert_signals, audit_outbox), as the proposal's architecture describes.
  */
 @SpringBootApplication(scanBasePackages = "edu.neu.ecp")
-@EnableScheduling
 public class PlatformApplication {
 
     public static void main(String[] args) {
