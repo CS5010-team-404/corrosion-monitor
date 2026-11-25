@@ -15,8 +15,8 @@ import org.springframework.stereotype.Repository;
 
 /**
  * Reads the shared MySQL database: the team schema (equipment, location, equipment_profile) and the platform's tables
- * (sensors, sensor_health, readings), see docs/CONTRACTS.md. Readings of sensors that sensor health has not marked
- * trusted are never loaded.
+ * (sensors, sensor_health, readings, sensor_forecasts), see docs/CONTRACTS.md. Readings of sensors that sensor health
+ * has not marked trusted are never loaded.
  */
 @Repository
 public class JdbcAnalyticsRepo implements AnalyticsRepo {
@@ -31,7 +31,8 @@ public class JdbcAnalyticsRepo implements AnalyticsRepo {
 
     /**
      * One row per active sensor of each equipment item. Within an item the trusted sensors come first (a sensor
-     * without a health row counts as not trusted), so the first row of an item is the one to use.
+     * without a health row counts as not trusted), so the first row of an item is the one to use. The sensor's latest
+     * forecast row, if it has one, is joined on; the service ignores it when it is too old.
      */
     private static final String EQUIPMENT_SQL = """
             SELECT e.id, e.name, l.name AS location_name,
@@ -39,12 +40,15 @@ public class JdbcAnalyticsRepo implements AnalyticsRepo {
                    p.kind, p.temp_min_c, p.temp_max_c, p.surface_offset_c,
                    p.dew_margin_warn_c, p.dew_margin_critical_c, p.rh_warn_pct, p.rh_critical_pct,
                    p.risk_budget, p.peck_n, p.peck_ea_ev, p.ref_temp_c, p.ref_rh_pct,
-                   s.id AS sensor_id, s.device_id, h.trusted
+                   s.id AS sensor_id, s.device_id, h.trusted,
+                   f.margin_15_c, f.margin_30_c, f.margin_60_c, f.warning_probability_30, f.warning_probability_60,
+                   f.method, f.predicted_condensation_at, f.computed_at
             FROM equipment e
             JOIN location l ON l.id = e.location_id
             JOIN equipment_profile p ON p.id = e.profile_id
             LEFT JOIN sensors s ON s.equipment_id = e.id AND s.active = TRUE
             LEFT JOIN sensor_health h ON h.sensor_id = s.id
+            LEFT JOIN sensor_forecasts f ON f.sensor_id = s.id
             ORDER BY e.id, COALESCE(h.trusted, 0) DESC, s.id
             """;
 
@@ -77,9 +81,22 @@ public class JdbcAnalyticsRepo implements AnalyticsRepo {
                     rs.getString("kind"), rs.getDouble("temp_min_c"), rs.getDouble("temp_max_c"),
                     rs.getDouble("surface_offset_c"), thresholds, rs.getDouble("risk_budget"),
                     rs.getDouble("peck_n"), rs.getDouble("peck_ea_ev"), rs.getDouble("ref_temp_c"),
-                    rs.getDouble("ref_rh_pct"), sensorId, rs.getString("device_id"), trusted, readings));
+                    rs.getDouble("ref_rh_pct"), sensorId, rs.getString("device_id"), trusted, readings,
+                    forecast(rs)));
         });
         return new ArrayList<>(byEquipment.values());
+    }
+
+    /** The joined forecast row, or null when the sensor has none (or there is no sensor). */
+    private static SensorForecast forecast(java.sql.ResultSet rs) throws java.sql.SQLException {
+        LocalDateTime computedAt = rs.getObject("computed_at", LocalDateTime.class);
+        if (computedAt == null) {
+            return null;
+        }
+        LocalDateTime predicted = rs.getObject("predicted_condensation_at", LocalDateTime.class);
+        return new SensorForecast(rs.getDouble("margin_15_c"), rs.getDouble("margin_30_c"), rs.getDouble("margin_60_c"),
+                rs.getDouble("warning_probability_30"), rs.getDouble("warning_probability_60"), rs.getString("method"),
+                predicted == null ? null : predicted.toInstant(ZoneOffset.UTC), computedAt.toInstant(ZoneOffset.UTC));
     }
 
     private Map<Long, List<Reading>> loadTrustedReads(Instant since) {

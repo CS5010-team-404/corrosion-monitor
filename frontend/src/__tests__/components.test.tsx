@@ -1,8 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { NotBuilt } from "../components/ui";
-import { PENDING } from "../api/endpoints";
-import { NotBuiltError, setMockHandler } from "../lib/api";
+import { NotBuiltError, setMockHandler, type Pending } from "../lib/api";
 import { config } from "../lib/config";
 import { AuthProvider } from "../lib/auth";
 import { Router } from "../lib/router";
@@ -13,6 +12,9 @@ import { Reports } from "../pages/Reports";
 
 // DataTable's tests live in datatable.test.tsx.
 
+// An example of a pending endpoint for the panel; nothing is pending in src/api/endpoints.ts now.
+const HISTORY: Pending = { key: "history", what: "Equipment history", endpoint: "GET /api/v1/equipment/{id}/assessments", owner: "Aayushee" };
+
 describe("NotBuilt panel", () => {
   beforeAll(() => {
     config.useMocks = false;
@@ -22,14 +24,14 @@ describe("NotBuilt panel", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("names the missing endpoint and its owner", () => {
-    render(<NotBuilt error={new NotBuiltError(404, PENDING.assessments)} />);
+    render(<NotBuilt error={new NotBuiltError(404, HISTORY)} />);
     expect(screen.getByText("Not built yet")).toBeTruthy();
     expect(screen.getByText(/It needs GET \/api\/v1\/equipment\/\{id\}\/assessments \(owner: Aayushee\)/)).toBeTruthy();
   });
 
-  // Equipment history still waits on GET /api/v1/equipment/{id}/assessments (PENDING.assessments); profiles, users and
-  // reports are built now, so their 404 is a real error.
-  it("a page whose endpoint answers 404 shows the panel, not an error", async () => {
+  // The Equipment page shows its history panel for any 404 or 501 from GET /api/v1/equipment/{id}/assessments (an
+  // older backend that doesn't have it); profiles, users and reports are built, so their 404 is a real error.
+  it("an Equipment page whose history endpoint answers 404 shows the panel, not an error", async () => {
     const status = [{ equipmentId: 1, equipmentName: "Pump P-101", locationName: "Hall A", profileName: "Carbon steel", profileKind: "plc",
       riskLevel: "NORMAL", riskIndex: 0.1, temperatureC: 20, humidityPct: 50, surfaceTempC: 19, dewPointC: 9, marginC: 10,
       forecastMargin15C: null, forecastMargin30C: null, forecastMargin60C: null, predictedCondensationAt: null, updatedAt: new Date().toISOString(),
@@ -43,7 +45,6 @@ describe("NotBuilt panel", () => {
     history.replaceState(null, "", "/equipment/1");
     render(<ToastProvider><AuthProvider><Router><Equipment id={1} /></Router></AuthProvider></ToastProvider>);
     expect(await screen.findByText("Not built yet", {}, { timeout: 4000 })).toBeTruthy();
-    expect(screen.getByText(/It needs GET \/api\/v1\/equipment\/\{id\}\/assessments/)).toBeTruthy();
     expect(screen.queryByText("Could not load this page")).toBeNull();
   });
 
